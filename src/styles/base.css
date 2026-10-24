@@ -1,0 +1,5 @@
+:root { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color-scheme: dark; background: #10151b; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+#app { min-height: 100dvh; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #a9e7cd; outline-offset: 4px; }
