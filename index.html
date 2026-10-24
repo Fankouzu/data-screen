@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="数据大屏作品索引。浏览三维数据可视化、实时监测与交互大屏。">
+  <title>Data Screen — 数据大屏索引</title>
+  <link rel="stylesheet" href="assets/catalog.css">
+  <script src="assets/screens.js" defer></script>
+  <script src="assets/catalog.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#collection">跳转到大屏列表</a>
+  <div class="site-shell">
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Data Screen 首页">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 6h26v17H3zM10 28h12M16 23v5"/><path class="brand-signal" d="m7 17 5-5 4 5 8-8"/></svg>
+        <span>DATA<span class="brand-divider">/</span>SCREEN</span>
+      </a>
+      <nav aria-label="主导航">
+        <a class="nav-current" href="#collection">作品索引</a>
+        <a href="https://github.com/mzlc-linmo/data-screen" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow"><span class="status-dot"></span> A GROWING COLLECTION</p>
+          <h1 id="page-title">数据大屏<span class="title-outline">作品索引</span></h1>
+          <p class="intro-copy">从数据到空间，从信息到现场。<br class="mobile-break">在这里浏览和打开每一块大屏。</p>
+        </div>
+        <div class="collection-count" aria-label="大屏总数"><strong id="total-count">01</strong><span>SCREENS IN COLLECTION</span></div>
+      </section>
+
+      <section id="collection" class="collection" aria-labelledby="collection-title">
+        <div class="collection-heading"><h2 id="collection-title">全部作品 <span id="result-count" aria-live="polite"></span></h2><span class="collection-caption">EXPLORE THE SCREENS</span></div>
+        <div class="toolbar">
+          <div id="categories" class="categories" role="group" aria-label="按主题筛选"><button class="category active" data-category="all" aria-pressed="true">全部</button></div>
+          <div class="toolbar-right">
+            <label class="search-box"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="m12 12 5 5"/></svg><input id="search" type="search" placeholder="搜索名称、主题或标签" autocomplete="off" aria-label="搜索大屏"></label>
+            <label class="sort-label"><span class="sr-only">排序方式</span><select id="sort"><option value="recent">最近添加</option><option value="name">按名称排序</option></select></label>
+          </div>
+        </div>
+        <div id="screen-grid" class="screen-grid"></div>
+        <div id="empty-state" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">⌕</span><h3>没有匹配的大屏</h3><p>换个关键词，或清除筛选查看全部作品。</p><button id="clear-search" class="clear-button">清除筛选</button></div>
+        <noscript><p class="noscript">请启用 JavaScript 浏览索引，或直接<a href="dashboards/prompt-crawler/index.html">打开 Prompt Crawler 三维数据大屏</a>。</p></noscript>
+      </section>
+      <div class="collection-end"><span class="end-line"></span><span>持续收录，持续探索</span><span class="end-line"></span></div>
+    </main>
+    <footer class="site-footer"><span>DATA / SCREEN <span class="footer-muted">— 可交互的数据可视化作品集</span></span><a href="https://github.com/mzlc-linmo/data-screen" target="_blank" rel="noopener noreferrer">查看仓库 <span aria-hidden="true">↗</span></a></footer>
+  </div>
+</body>
+</html>
