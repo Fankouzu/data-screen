@@ -1,4 +1,5 @@
 import promptCrawlerPreview from '../assets/previews/prompt-crawler.webp'
+import decisionGridPreview from '../assets/previews/decision-grid.webp'
 
 export interface ScreenDefinition {
   id: string
@@ -27,11 +28,28 @@ export const screens: ScreenDefinition[] = [
     url: '/screens/prompt-crawler',
     preview: promptCrawlerPreview,
     date: '2026-10-24',
-    featured: true,
+    featured: false,
     highlights: [
       { value: '34,100', label: '空间粒子' },
       { value: '08', label: '扫描阶段' },
       { value: '2.5×', label: '默认速度' },
+    ],
+  },
+  {
+    id: 'decision-grid',
+    title: 'Decision Grid',
+    subtitle: '智能决策网络 · 三维信息流大屏',
+    description: '穿行于 15 面发光数据墙，追踪从状态、提问到决策与执行的五步路径。12 个业务案例轮流点亮网络，置信度与监测面板实时联动。',
+    category: '决策可视化',
+    tags: ['3D 数据墙', '决策路径', '动态监测'],
+    url: '/screens/decision-grid',
+    preview: decisionGridPreview,
+    date: '2026-10-24',
+    featured: true,
+    highlights: [
+      { value: '600', label: '空间节点' },
+      { value: '15', label: '数据墙' },
+      { value: '12', label: '业务案例' },
     ],
   },
 ]

@@ -1,6 +1,9 @@
 # Data Screen · 数据大屏应用
 
-**Vue 3 + TypeScript + Vite + Vue Router** 数据可视化工程。索引页使用 Vue 响应式组件；每个大屏是按需加载的路由页面。当前收录 Prompt Crawler：34,100 个真实 XYZ 粒子、WebGL 点线渲染、八阶段扫描与六块联动监测面板。
+**Vue 3 + TypeScript + Vite + Vue Router** 数据可视化工程。索引页使用 Vue 响应式组件；每个大屏是按需加载的路由页面。
+
+- **Prompt Crawler**：34,100 个真实 XYZ 粒子、WebGL 点线渲染、八阶段扫描与六块联动监测面板。
+- **Decision Grid**：15 面空间数据墙、600 张决策卡片、流动光束、五阶段决策路径与 12 个业务案例，复刻第二段视频的决策网络效果。
 
 ## 开发与生产构建
 
@@ -28,6 +31,7 @@ npm run preview    # 本地验证生产产物，默认 4173
 | --- | --- |
 | `/#/` | 作品索引，支持搜索、分类与排序 |
 | `/#/screens/prompt-crawler` | 三维语义网络大屏 |
+| `/#/screens/decision-grid` | 三维决策网络大屏 |
 | 其他 hash 路由 | 404 页面 |
 
 采用 hash 路由，支持 CDN、对象存储、Nginx 和子目录托管，刷新深链接无需服务端重写。
@@ -44,9 +48,13 @@ src/
     PromptCrawler.vue                  # 大屏组件与生命周期
     engine.js / engine.d.ts             # WebGL 引擎及入口类型
     style.css                          # 隔离的大屏样式
+  dashboards/decision-grid/
+    DecisionGrid.vue                    # 指标、案例、监测面板与交互控制
+    model.ts / engine.ts                # 决策状态与 XYZ 投影渲染
+    style.css                          # 决策大屏独立样式
   assets/previews/                     # 由 Vite 处理的预览资源
   styles/                             # 公共基础与索引样式
-tests/app.spec.ts                      # 浏览器端到端回归
+tests/*.spec.ts                        # 两个大屏的浏览器端到端回归
 deploy/nginx.conf                      # 容器生产服务配置
 Dockerfile                            # 多阶段构建
 .github/workflows/ci.yml               # 检查、测试、构建与产物归档
@@ -98,7 +106,7 @@ npm run test:e2e
 npm run check
 ```
 
-测试生产预览：搜索/筛选、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。
+测试生产预览：双大屏索引的搜索/筛选/排序、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。Decision Grid 还验证 12 案例切换、五阶段推进，以及低于 0.85 置信度时的人工复核路径。
 
 如果本机已有 Chrome，也可以设置 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 为可执行文件路径。CI 使用 Playwright 官方 Chromium。推送 main 或打开 PR 后会运行 CI；成功构建的 `dist/` 可在 GitHub Actions artifacts 下载。CI 不自动发布外网。
 
@@ -129,6 +137,10 @@ docker run --rm -p 8080:80 data-screen
 
 ## 大屏操作与范围
 
-拖动旋转、Shift + 拖动平移、滚轮缩放；空间键暂停/播放；`2.5×` 切换速度；`↺` 重播；`⌖` 重置；`⛶` 全屏。默认保留 2.5 倍速的短停、突进、回弹节奏。系统减少动态效果时默认暂停。
+Prompt Crawler：拖动旋转、Shift + 拖动平移、滚轮缩放；空间键暂停/播放；`2.5×` 切换速度；`↺` 重播；`⌖` 重置；`⛶` 全屏。默认保留 2.5 倍速的短停、突进、回弹节奏。
+
+Decision Grid：拖动或聚焦画布后按方向键旋转，滚轮缩放；选择任意业务案例即可从 STATE 重新开始。每个案例依次经过 STATE → ASK → JEV → GATE → CODE，默认每 6 秒切换案例。`Ⅱ` 暂停、`1×` 切换速度、`↺` 重播当前案例、`⌖` 重置视角、`⛶` 全屏。暂停时可调整视角。界面显示的成本、延迟、置信度等均为视频风格的演示数值，并非实测服务表现；支持案例以 0.71 置信度展示 HOLD / human_gate 分支。
+
+两个大屏在系统减少动态效果时均默认暂停。新大屏无需增加依赖，使用 Canvas 2D 绘制真实 XYZ 几何的透视投影；离开页面会清理绘制循环、事件、纹理缓存及尺寸观察器。
 
 目前使用模拟数据，无后台服务或凭据。WebGL 不可用时使用 Canvas 投影点云回退；全屏受浏览器权限限制。本次提供可部署工程和 CI 配置，不默认创建外部托管项目。
