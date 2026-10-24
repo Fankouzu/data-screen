@@ -49,7 +49,7 @@ export function mountDecisionGrid(canvas: HTMLCanvasElement, options: GridOption
   }
   // Vertical dendrites hug each card wall. Cross-column threads form a connected graph.
   for (let layer = 0; layer < 3; layer++) for (let column = 0; column < 5; column++) {
-    for (let strand = 0; strand < 13; strand++) {
+    for (let strand = 0; strand < 26; strand++) {
       const seed = layer * 157 + column * 31 + strand;
       const points: Point[] = [];
       for (let step = 0; step <= 28; step++) {
@@ -61,7 +61,7 @@ export function mountDecisionGrid(canvas: HTMLCanvasElement, options: GridOption
       filaments.push({ points, color: strand % 3 ? '#d2e8ff' : palette[column], seed, bright: strand % 4 === 0 });
     }
   }
-  for (let index = 0; index < 210; index++) {
+  for (let index = 0; index < 780; index++) {
     const seed = index + 1000, column = index % 4;
     const depth = Math.floor(hash(seed) * 3) * 490;
     const start = { x: (column - 2) * 222 + 65, y: (hash(seed + 1) - .5) * 830, z: depth };
@@ -179,11 +179,11 @@ export function mountDecisionGrid(canvas: HTMLCanvasElement, options: GridOption
       const points = filament.points.map(project);
       const scale = points[0].scale / fit;
       const activeWall = filament.seed < 1000 && Math.floor((filament.seed % 157) / 31) === phase;
-      ctx.globalAlpha = filament.bright ? .47 * scale : (filament.seed >= 1000 ? .38 : .12) * scale;
+      ctx.globalAlpha = filament.bright ? .40 * scale : (filament.seed >= 1000 ? .27 : .10) * scale;
       ctx.strokeStyle = activeWall ? cases[selectedCase].color : filament.color; ctx.lineWidth = filament.bright ? .85 : .52;
       trace(points); ctx.stroke();
       if (filament.bright) { ctx.globalAlpha = .065 * scale; ctx.lineWidth = 6 * fit; ctx.stroke(); }
-      if (!filament.bright && filament.seed % 3 !== 0) continue;
+      if (!filament.bright && filament.seed % 2 !== 0) continue;
       const travel = (time * (filament.bright ? .38 : .22) + hash(filament.seed)) % 1;
       const slot = travel * (points.length - 1), index = Math.floor(slot);
       const first = points[index], next = points[Math.min(index + 1, points.length - 1)];
@@ -208,8 +208,8 @@ export function mountDecisionGrid(canvas: HTMLCanvasElement, options: GridOption
         ctx.globalAlpha = .96; ctx.lineWidth = 1.2 * fit; ctx.stroke();
       }
       // Small dendrite junctions interrupt the continuous trunk with concentrated light.
-      for (let node = 0; node < 22; node++) {
-        const seed = column * 47 + node;
+      for (let node = 0; node < 48; node++) {
+        const seed = column * 67 + node;
         const worldY = (hash(seed + 71) - .5) * 850;
         const center = project({ x: (column - 2) * 222 + 102 + Math.sin(worldY * .012 + column) * 5, y: worldY, z: -20 });
         const branch = project({ x: (column - 2) * 222 + 102 + (hash(seed + 19) - .5) * 120, y: worldY + (hash(seed + 27) - .5) * 150, z: 35 });
