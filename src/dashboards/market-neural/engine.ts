@@ -264,6 +264,7 @@ export function mountMarketNeural(canvas: HTMLCanvasElement, options: NeuralOpti
       separation += (target - separation) * Math.min(1, dt * 4.5);
     }
     draw();
+    options.onFrame?.(time);
     if (paused || now - lastUpdate >= 100) { notify(); lastUpdate = now; }
     if (!paused) schedule();
   }
@@ -304,7 +305,7 @@ export function mountMarketNeural(canvas: HTMLCanvasElement, options: NeuralOpti
     setPaused(value) { if (disposed) return; paused = value; last = 0; if (raf) cancelAnimationFrame(raf); raf = 0; notify(); if (!paused) schedule(); },
     setSpeed(value) { if (disposed) return; speed = clamp(Number.isFinite(value) ? value : 1, .25, 4); notify(); },
     setMode(value) { if (disposed) return; mode = value; if (paused) separation = targetSeparation(); notify(); schedule(); },
-    restart() { if (disposed) return; time = 0; separation = targetSeparation(); last = 0; notify(); schedule(); },
+    restart() { if (disposed) return; time = 0; separation = targetSeparation(); last = 0; options.onFrame?.(time); notify(); schedule(); },
     resetView() { if (disposed) return; yaw = 0; pitch = 0; zoom = 1; schedule(); },
     getDiagnostics(): NeuralDiagnostics {
       let min = Infinity; let max = -Infinity;

@@ -3,11 +3,15 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { mountMarketNeural } from './engine';
 import { feeds, initialSnapshot, type NeuralController, type NeuralSnapshot } from './model';
+import { createWireOrder, createZHistory, Z_CAPACITY, Z_INITIAL_SAMPLES, Z_SAMPLE_RATE } from './streams';
 import './style.css';
 
 declare global { interface Window { marketNeural?: NeuralController } }
 const root = ref<HTMLElement>();
 const canvas = ref<HTMLCanvasElement>();
+const tickerTrack = ref<HTMLElement>();
+const wireTrack = ref<HTMLElement>();
+const orderStep = ref(0);
 const snapshot = ref<NeuralSnapshot>({ ...initialSnapshot });
 const notice = ref('');
 let controller: NeuralController | undefined;
@@ -17,8 +21,18 @@ const clock = computed(() => new Date(Date.UTC(2026, 9, 24, 15, 42, 38) + snapsh
 const tick = computed(() => Math.floor(snapshot.value.time * 3));
 function noise(i: number, seed = 0) { const n = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453; return n - Math.floor(n); }
 function wave(i: number, seed: number, offset: number) { return Math.sin(i * .23 + seed + offset) * 14 + Math.sin(i * .67 + seed * 2 + offset * .7) * 6 + (noise(i, seed) - .5) * 9; }
-const lineColors = ['#70c2f4', '#cf91db', '#69dea9', '#f5cb78', '#a8b9dc'];
-const traces = computed(() => lineColors.map((color, seed) => ({ color, points: Array.from({ length: 94 }, (_, i) => `${i * 4},${68 + wave(i, seed, snapshot.value.time * .17) - i * (.20 + seed * .02)}`).join(' ') })));
+const chartSample = computed(() => Z_INITIAL_SAMPLES + Math.floor(snapshot.value.time * Z_SAMPLE_RATE));
+const chartCycle = computed(() => Math.floor(chartSample.value / Z_CAPACITY));
+const chartCount = computed(() => chartSample.value % Z_CAPACITY);
+const chartHistory = computed(() => createZHistory(chartCycle.value));
+const chartX = computed(() => 10 + chartCount.value / Z_CAPACITY * 360);
+const traces = computed(() => chartHistory.value.map(trace => ({
+  name: trace.name, color: trace.color, value: trace.values[chartCount.value]!,
+  y: 78 - trace.values[chartCount.value]! * 29,
+  points: trace.values.slice(0, chartCount.value + 1).map((value, i) => `${(10 + i / Z_CAPACITY * 360).toFixed(2)},${(78 - value * 29).toFixed(2)}`).join(' '),
+})));
+const maxZ = computed(() => Math.max(...traces.value.map(trace => Math.abs(trace.value))));
+const dislocations = computed(() => traces.value.filter(trace => Math.abs(trace.value) >= 2).length);
 const feedLines = computed(() => feeds.map((feed, seed) => ({ ...feed, points: Array.from({ length: 42 }, (_, i) => `${i * 3},${34 + wave(i, seed, snapshot.value.time * .32) * .8}`).join(' '), value: [number(snapshot.value.btc), number(46132 + tick.value * 7), snapshot.value.probability.toFixed(3), (.546 + Math.sin(snapshot.value.time) * .02).toFixed(3), `+${snapshot.value.edge.toFixed(2)}¢`, `${1993 + tick.value} / 856`][seed] })));
 const candles = computed(() => Array.from({ length: 44 }, (_, i) => {
   const t = i + Math.floor(snapshot.value.time / 4);
@@ -31,7 +45,14 @@ const executions = computed(() => Array.from({ length: 12 }, (_, i) => ({ id: sn
 const stack = computed(() => Array.from({ length: 10 }, (_, i) => ({ label: ['FILL UP', 'HEDGE DN', 'LIMIT UP', 'LIMIT UP', 'FILLED UP'][i % 5], value: number(1.4 + noise(i + Math.floor(snapshot.value.time), 6) * 152, 2), color: i % 5 === 1 ? '#ff4d71' : '#68dab0', width: 20 + noise(i, 4) * 70 })));
 const scatter = Array.from({ length: 150 }, (_, i) => { const band = i % 4; return { x: 30 + band * 35 + (noise(i, 2) - .5) * 66, y: 25 + band * 34 + (noise(i, 4) - .5) * 45, r: 1 + noise(i, 7) * 2.3, color: ['#64dfff', '#f9e953', '#70f4c5', '#f74371'][i % 4] }; });
 const bars = Array.from({ length: 31 }, (_, i) => ({ x: i * 7 + 3, height: 5 + noise(i, 4) * 26 + Math.exp(-Math.pow((i - 20) / 6, 2)) * 70, red: i > 21 }));
-const wireRows = Array.from({ length: 13 }, (_, i) => ({ id: `0x${(243902 + i * 7819).toString(16)}…${(549 + i * 13).toString(16)}`, bytes: 62 + i * 17, blocks: Array.from({ length: 17 }, (_, j) => noise(i, j) > .45), value: (46 + noise(i, 3) * 50).toFixed(2) }));
+const wireRows = computed(() => Array.from({ length: 32 }, (_, i) => createWireOrder(orderStep.value + i)));
+function animateStreams(time: number) {
+  // Share the scene RAF: transforms remain smooth without refreshing Vue at 60Hz.
+  if (tickerTrack.value) tickerTrack.value.style.transform = `translate3d(-${time * 180 % 1800}px,0,0)`;
+  const offset = time * 6;
+  orderStep.value = Math.floor(offset);
+  if (wireTrack.value) wireTrack.value.style.transform = `translate3d(0,-${(offset % 1) * 12}px,0)`;
+}
 function togglePause() { controller?.setPaused(!snapshot.value.paused); }
 function cycleSpeed() { const speeds = [1, 1.5, 2, .75]; controller?.setSpeed(speeds[(speeds.indexOf(snapshot.value.speed) + 1) % speeds.length]!); }
 function handleMotionChange(event: MediaQueryListEvent) { if (event.matches) controller?.setPaused(true); }
@@ -42,7 +63,7 @@ async function fullscreen() {
 onMounted(() => {
   if (!canvas.value) return;
   motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
-  controller = mountMarketNeural(canvas.value, { initialPaused: motionPreference.matches, onUpdate: state => { snapshot.value = state; } });
+  controller = mountMarketNeural(canvas.value, { initialPaused: motionPreference.matches, onUpdate: state => { snapshot.value = state; }, onFrame: animateStreams });
   window.marketNeural = controller;
   motionPreference.addEventListener('change', handleMotionChange);
 });
@@ -61,7 +82,7 @@ onBeforeUnmount(() => {
       <div class="mn-top-stats"><div><small>BTC <b>SPOT</b></small><strong>${{ number(snapshot.btc) }}</strong></div><div><small>P_MODEL UP</small><strong>{{ snapshot.probability.toFixed(3) }}</strong></div><div><small>MODEL EDGE</small><strong>+{{ snapshot.edge.toFixed(2) }}¢</strong></div><div class="mn-hide-small"><small>MINOR / MAJOR</small><strong>40.8%</strong></div></div>
       <div class="mn-clock"><strong>{{ clock }} <small>UTC</small></strong><span>● SIMULATED FEED</span></div>
     </header>
-    <div class="mn-ticker"><b>● LIVE FEED</b><span>BTC / USD · {{ number(snapshot.btc, 2) }} <i>↑ 0.71%</i> <span class="mn-ticker-extra">· SIGNAL HOLDS · UP {{ snapshot.probability.toFixed(2) }} · BUY UP AGAIN · $33.83 · FLIP ↔ TOP 1% · PAIR P CROSSES THE BOOK</span></span><small>{{ snapshot.paused ? 'PAUSED' : 'STREAM CONNECTED' }}</small></div>
+    <div class="mn-ticker"><b>● LIVE FEED</b><div class="mn-ticker-window"><div ref="tickerTrack" class="mn-ticker-track"><span v-for="copy in 3" :key="copy" class="mn-ticker-copy" :aria-hidden="copy > 1 ? true : undefined"><span>BTC / USD · {{ number(snapshot.btc, 2) }} <i>↑ 0.71%</i></span><span>· SIGNAL HOLDS · UP {{ snapshot.probability.toFixed(2) }} · BUY UP AGAIN · $33.83</span><span class="mn-red">· SELL BTC · HEDGE DOWN · $44.67</span><span>· FLIP ↔ TOP 1% · FAIR P CROSSES THE BOOK</span><span class="mn-green">· LIMIT FILL · 264 UP SHARES · MODEL EDGE +{{ snapshot.edge.toFixed(2) }}¢</span><span>· PARTIAL HEDGE · UP 133 / DOWN 115 SHARES · SOL 15M</span></span></div></div><small>{{ snapshot.paused ? 'PAUSED' : 'STREAM CONNECTED' }}</small></div>
 
     <section class="mn-upper" aria-label="模拟市场数据与交易指标">
       <div class="mn-wallet mn-panel">
@@ -69,8 +90,28 @@ onBeforeUnmount(() => {
         <h2 class="mn-inner-heading">◇ PAYOFF PROFILE · BTC 5M <span>LIVE</span></h2><div class="mn-payoff"><svg viewBox="0 0 190 100" preserveAspectRatio="none" aria-label="模拟盈亏曲线" role="img"><path class="mn-grid-line" d="M0 25H190M0 50H190M0 75H190M40 0V100M80 0V100M120 0V100M160 0V100"/><path d="M0 20H18V25H30V18H40V29H55V23H90V25H125V31H151V30H190V82H0Z" fill="#26364f"/><path d="M0 20H18V25H30V18H40V29H55V23H90V25H125V31H151V30H190" fill="none" stroke="#a0687c"/><path d="M0 79L15 82 22 87 27 74 33 77 40 70 45 82 62 80 67 85 75 73 80 76 87 81 94 79 110 83 120 77 140 81 160 80 190 83" fill="none" stroke="#eee3a5"/></svg><div><small>MAX LOSS</small><b class="mn-red">−$487.23</b><small>EXPECTED</small><b class="mn-green">+$341.77</b><small>AT SPOT</small><b>−$277.36</b></div></div>
       </div>
       <div class="mn-center-upper">
-        <article class="mn-panel mn-correlations"><h2>◆ LOCAL Z-SCORE · Σ = 0 / Σ(1) · 4 ASSETS <span>5M</span></h2><div class="mn-chart-with-side"><div class="mn-correlated-plot"><svg viewBox="0 0 376 115" preserveAspectRatio="none" aria-label="五路模拟关联信号" role="img"><path d="M0 20H376M0 40H376M0 60H376M0 80H376M0 100H376M60 0V115M120 0V115M180 0V115M240 0V115M300 0V115M360 0V115" class="mn-grid-line"/><path d="M0 10H376V105H0Z" fill="#71916b" opacity=".08"/><polyline v-for="trace in traces" :key="trace.color" :points="trace.points" :stroke="trace.color" fill="none" stroke-width="1.5"/><text x="4" y="13" fill="#e1e881">CO-MOVEMENT / ROLLING</text><text x="4" y="28" fill="#80bd91">SIM · FAIR VALUE / SPOT / FLOW</text></svg><div class="mn-axis"><span>15:38</span><span>15:39</span><span>15:40</span><span>15:41</span><span>{{ clock.slice(0, 5) }}</span></div></div><div class="mn-chart-stats"><small>MAX |z|</small><b class="mn-green">1.57σ</b><small>DISLOCATIONS</small><b class="mn-yellow">0 / 4</b><small>CORR COEF</small><b class="mn-purple">69.3%</b><small>RS STRENGTH</small><b class="mn-blue">0.29</b></div></div></article>
-        <article class="mn-panel mn-wire"><h2>◆ WIRE INSPECTOR · CLOB / POLYGON <span>SIM</span></h2><div class="mn-wire-layout"><div class="mn-wire-rows"><div v-for="(row, i) in wireRows" :key="row.id"><small>{{ row.id }}</small><span class="mn-byte-row"><i v-for="(active, j) in row.blocks" :key="j" :class="{ active, pulse: j === (tick + i) % 17 }"></i></span><span>{{ row.bytes }}B</span><i class="mn-wire-bar" :style="{ width: `${row.value}%` }"></i></div></div><div class="mn-chart-stats"><small>EVENTS</small><b class="mn-blue">{{ 227 + tick }}</b><small>BOOK DELTAS</small><b class="mn-blue">{{ 381 + tick * 2 }}</b><small>BYTES OUT · SEC</small><b>669.3 KB</b><small>LAST FRAME ID</small><b class="mn-yellow">0xb7df…fd27</b></div></div></article>
+        <article class="mn-panel mn-correlations">
+          <h2>◆ LOCAL Z-SCORE · Σ = 0 / Σ(1) · 4 ASSETS <span>5M</span></h2>
+          <div class="mn-chart-with-side"><div class="mn-correlated-plot">
+            <svg viewBox="0 0 420 145" preserveAspectRatio="none" aria-label="四资产 Z-SCORE 实时追加轨迹" role="img">
+              <defs><linearGradient id="mn-z-band" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#34584b" stop-opacity=".48"/><stop offset="1" stop-color="#7c9d7c" stop-opacity=".10"/></linearGradient></defs>
+              <path d="M10 14H410V131H10Z" fill="url(#mn-z-band)" stroke="#6a8276" stroke-opacity=".32"/>
+              <path d="M10 20H410M10 49H410M10 107H410M10 128H410" stroke="#a6b6a6" stroke-width=".5" stroke-dasharray="2 3" opacity=".38"/>
+              <path d="M10 78H410" stroke="#a2b9ad" stroke-width=".6" opacity=".6"/>
+              <path d="M82 14V131M154 14V131M226 14V131M298 14V131M370 14V131" class="mn-grid-line"/>
+              <text x="12" y="11" fill="#e2de77">DISLOCATION &gt; 2.0σ</text><text x="12" y="44" fill="#80b6a0">NORMAL RANGE / ±1.0σ</text>
+              <polyline v-for="trace in traces" :key="trace.name" class="mn-z-trace" :data-asset="trace.name" :points="trace.points" :stroke="trace.color" fill="none" stroke-width="1.3" vector-effect="non-scaling-stroke"/>
+              <line class="mn-z-cursor" :x1="chartX" :x2="chartX" y1="14" y2="131" stroke="#a7c7c4" stroke-width=".7" opacity=".7"/>
+              <g v-for="trace in traces" :key="trace.name"><circle :cx="chartX" :cy="trace.y" r="1.7" :fill="trace.color"/><rect :x="chartX + 3" :y="trace.y - 4" width="32" height="8" fill="#0b1420" opacity=".88"/><text :x="chartX + 5" :y="trace.y + 1.5" :fill="trace.color">{{ trace.name }} {{ trace.value.toFixed(1) }}</text></g>
+              <text x="12" y="141" fill="#90a39d">0</text><text x="80" y="141" fill="#90a39d">60</text><text x="150" y="141" fill="#90a39d">120</text><text x="222" y="141" fill="#90a39d">180</text><text x="294" y="141" fill="#90a39d">240</text><text x="373" y="141" fill="#90a39d">SAMPLES</text>
+            </svg>
+            <div class="mn-z-legend"><span v-for="trace in traces" :key="trace.name" :style="{ color: trace.color }">━ {{ trace.name }}</span><small>LOCAL WINDOW · {{ chartCount }} / {{ Z_CAPACITY }}</small></div>
+          </div><div class="mn-chart-stats"><small>MAX |z|</small><b class="mn-green">{{ maxZ.toFixed(2) }}σ</b><small>DISLOCATIONS</small><b class="mn-yellow">{{ dislocations }} / 4</b><small>CORR COEF</small><b class="mn-purple">{{ (96 - chartCount * .16).toFixed(1) }}%</b><small>TO REFRESH</small><b class="mn-blue">0:{{ String(Math.ceil((Z_CAPACITY - chartCount) / Z_SAMPLE_RATE)).padStart(2, '0') }}</b></div></div>
+        </article>
+        <article class="mn-panel mn-wire"><h2>◆ WIRE INSPECTOR · CLOB / POLYGON <span>SIM</span></h2><div class="mn-wire-layout"><div class="mn-wire-orders">
+          <div class="mn-wire-heading"><span>TIME</span><span>MKT</span><span>ORDER / TX</span><span>EVENT</span><span>SIDE</span><span>PRICE</span><span>SIZE</span><span>VALUE</span></div>
+          <div class="mn-wire-viewport" role="log" aria-label="向上滚动的模拟订单流" aria-live="off"><div ref="wireTrack" class="mn-wire-track"><div v-for="row in wireRows" :key="row.id" class="mn-wire-order" :data-order-id="row.id" :class="{ 'mn-order-buy': row.buy, 'mn-order-sell': !row.buy, 'mn-order-highlight': row.highlight }"><time>{{ row.time }}</time><span class="mn-blue">{{ row.asset }}</span><small>{{ row.hash }}</small><span class="mn-wire-event">{{ row.event }}</span><b class="mn-wire-side">{{ row.side }}</b><span>{{ row.price }}</span><span>{{ row.quantity }}</span><span class="mn-wire-value">${{ row.value }}</span></div></div></div>
+          </div><div class="mn-chart-stats"><small>EVENTS</small><b class="mn-blue">{{ 227 + orderStep }}</b><small>BOOK DELTAS</small><b class="mn-blue">{{ 381 + orderStep * 2 }}</b><small>BYTES OUT · SEC</small><b>{{ (669.3 + orderStep * .13).toFixed(1) }} KB</b><small>LAST FRAME ID</small><b class="mn-yellow">{{ wireRows[wireRows.length - 1]!.hash }}</b></div></div></article>
       </div>
       <article class="mn-panel mn-book"><h2>◆ BTC SPOT <span>01 / SIM</span></h2><div class="mn-book-price"><small>BTC/USD · 01</small><strong>${{ number(snapshot.btc) }}</strong><span class="mn-red">▼ 0.18%</span></div><svg class="mn-candles" viewBox="0 0 260 145" preserveAspectRatio="none" role="img" aria-label="模拟比特币蜡烛图"><path class="mn-grid-line" d="M0 25H260M0 50H260M0 75H260M0 100H260M0 125H260"/><g v-for="(candle, i) in candles" :key="i" :stroke="candle.up ? '#62daa5' : '#f34972'" :fill="candle.up ? '#62daa5' : '#f34972'"><path :d="`M${candle.x + 1.5} ${candle.high}V${candle.low}`"/><rect :x="candle.x" :y="candle.y" width="3" :height="candle.height"/></g><path d="M0 112H260" stroke="#778294" stroke-dasharray="3 4"/><rect x="210" y="108" width="48" height="10" fill="#d9a956"/><text x="214" y="116" fill="#111621">{{ number(snapshot.btc) }}</text></svg><div class="mn-book-caption"><b>DEPTH / ORDER VOLUME</b><span>0.01 USD</span></div><div class="mn-order-rows mn-asks"><div v-for="order in [...orders].reverse()" :key="order.sell"><i :style="{ width: `${order.width}%` }"></i><span>{{ order.sell }}</span><span>{{ order.volume }}</span><span>{{ number(Number(order.volume.replaceAll(',', '')) * 1.43, 1) }}</span></div></div><div class="mn-spread"><b>Last: 0.580</b><span>Spread: 1¢</span></div><div class="mn-order-rows mn-bids"><div v-for="order in orders" :key="order.buy"><i :style="{ width: `${order.width}%` }"></i><span>{{ order.buy }}</span><span>{{ order.volume }}</span><span>{{ number(Number(order.volume.replaceAll(',', '')) * 1.25, 1) }}</span></div></div></article>
     </section>

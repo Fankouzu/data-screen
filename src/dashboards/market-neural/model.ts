@@ -34,4 +34,8 @@ export interface NeuralController {
   dispose(): void;
   getDiagnostics(): NeuralDiagnostics;
 }
-export interface NeuralOptions { onUpdate: (state: NeuralSnapshot) => void; initialPaused?: boolean }
+export interface NeuralOptions {
+  onUpdate: (state: NeuralSnapshot) => void;
+  onFrame?: (time: number) => void;
+  initialPaused?: boolean;
+}

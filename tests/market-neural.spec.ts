@@ -27,6 +27,98 @@ async function openNeural(page: Page) {
 
 const snapshot = (page: Page) => page.evaluate(() => window.marketNeural!.getDiagnostics());
 
+const streamSnapshot = (page: Page) => page.evaluate(() => {
+  const ticker = document.querySelector<HTMLElement>('.mn-ticker-track');
+  const cursor = document.querySelector<SVGLineElement>('.mn-z-cursor');
+  if (!ticker || !cursor) throw new Error('Market stream or chart cursor is missing');
+  return {
+    time: window.marketNeural!.getDiagnostics().time,
+    tickerX: ticker.getBoundingClientRect().x,
+    rows: [...document.querySelectorAll<HTMLElement>('.mn-wire-track [data-order-id]')].map(row => ({
+      id: row.dataset.orderId,
+      text: row.textContent,
+      y: row.getBoundingClientRect().y,
+      height: row.getBoundingClientRect().height,
+    })),
+    traces: [...document.querySelectorAll<SVGPolylineElement>('.mn-z-trace')].map(trace => (trace.getAttribute('points') || '').trim().split(/\s+/)),
+    cursorX: Number(cursor.getAttribute('x1')),
+  };
+});
+
+test('Market live feed and WIRE orders scroll quickly, freeze on pause and reset on replay', async ({ page }) => {
+  await openNeural(page);
+  await page.evaluate(() => {
+    const controller = window.marketNeural!;
+    controller.setPaused(true);
+    controller.setSpeed(1);
+    controller.restart();
+  });
+  await expect.poll(async () => (await streamSnapshot(page)).time).toBe(0);
+  const initial = await streamSnapshot(page);
+  expect(initial.rows.length).toBeGreaterThan(8);
+  const trackedRow = initial.rows[Math.floor(initial.rows.length / 2)];
+  expect(trackedRow.id).toBeTruthy();
+  expect(trackedRow.height).toBeGreaterThan(0);
+  await page.getByRole('button', { name: '播放动画', exact: true }).click();
+  await expect.poll(async () => (await snapshot(page)).time, { intervals: [50, 80] }).toBeGreaterThan(.5);
+  await page.getByRole('button', { name: '暂停动画', exact: true }).click();
+  const moved = await streamSnapshot(page);
+  const retainedRow = moved.rows.find(row => row.id === trackedRow.id);
+  expect(retainedRow, 'An order must retain its identity while travelling upward').toBeDefined();
+  expect(retainedRow!.text).toBe(trackedRow.text);
+  const seconds = moved.time - initial.time;
+  const tickerPixelsPerSecond = (initial.tickerX - moved.tickerX) / seconds;
+  const wireRowsPerSecond = (trackedRow.y - retainedRow!.y) / trackedRow.height / seconds;
+  expect(tickerPixelsPerSecond).toBeGreaterThan(120);
+  expect(tickerPixelsPerSecond).toBeLessThan(250);
+  expect(wireRowsPerSecond).toBeGreaterThan(4);
+  expect(wireRowsPerSecond).toBeLessThan(8);
+
+  await page.waitForTimeout(300);
+  expect(await streamSnapshot(page)).toEqual(moved);
+  await page.getByRole('button', { name: '播放动画', exact: true }).click();
+  await expect.poll(async () => (await streamSnapshot(page)).tickerX).toBeLessThan(moved.tickerX - 20);
+  await page.getByRole('button', { name: '暂停动画', exact: true }).click();
+  await page.getByRole('button', { name: '重播演示', exact: true }).click();
+  await expect.poll(() => streamSnapshot(page)).toEqual(initial);
+});
+
+test('four market traces append stable historical points and sweep when the chart is full', async ({ page }) => {
+  await openNeural(page);
+  await page.evaluate(() => {
+    const controller = window.marketNeural!;
+    controller.setPaused(true);
+    controller.setSpeed(1);
+    controller.restart();
+  });
+  const before = await streamSnapshot(page);
+  expect(before.traces).toHaveLength(4);
+  expect(before.traces.every(points => points.length > 100)).toBe(true);
+  expect(Number.isFinite(before.cursorX)).toBe(true);
+  await page.getByRole('button', { name: '播放动画', exact: true }).click();
+  await expect.poll(async () => (await streamSnapshot(page)).traces[0].length, { intervals: [50, 80] }).toBeGreaterThan(before.traces[0].length + 4);
+  await page.getByRole('button', { name: '暂停动画', exact: true }).click();
+  const appended = await streamSnapshot(page);
+  for (let index = 0; index < 4; index++) {
+    expect(appended.traces[index].slice(0, before.traces[index].length)).toEqual(before.traces[index]);
+    expect(appended.traces[index].length).toBeGreaterThan(before.traces[index].length);
+  }
+  expect(appended.cursorX).toBeGreaterThan(before.cursorX);
+  await page.waitForTimeout(200);
+  expect(await streamSnapshot(page)).toEqual(appended);
+  await page.evaluate(() => {
+    const controller = window.marketNeural!;
+    controller.setSpeed(4);
+    controller.setPaused(false);
+  });
+  await expect.poll(async () => {
+    const current = await streamSnapshot(page);
+    return current.traces.length === 4
+      && current.traces.every(points => points.length < 50)
+      && current.cursorX < before.cursorX;
+  }, { intervals: [50, 80, 100], timeout: 10000 }).toBe(true);
+});
+
 test('Market Neural deep links refresh and playback controls affect the real timeline', async ({ page }) => {
   await openNeural(page);
   await page.reload();
