@@ -8,6 +8,7 @@ export const router = createRouter({
     { path: '/screens/prompt-crawler', name: 'prompt-crawler', component: () => import('../dashboards/prompt-crawler/PromptCrawler.vue'), meta: { title: 'Prompt Crawler · 三维语义网络' } },
     { path: '/screens/decision-grid', name: 'decision-grid', component: () => import('../dashboards/decision-grid/DecisionGrid.vue'), meta: { title: 'Decision Grid · 智能决策网络' } },
     { path: '/screens/market-neural', name: 'market-neural', component: () => import('../dashboards/market-neural/MarketNeural.vue'), meta: { title: 'Market Neural · 金融信号网络' } },
+    { path: '/screens/vortex-desk', name: 'vortex-desk', component: () => import('../dashboards/vortex-desk/VortexDesk.vue'), meta: { title: 'Vortex Desk · 粒子涡旋交易台' } },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue'), meta: { title: '未找到大屏' } },
   ],
   scrollBehavior: () => ({ top: 0 }),

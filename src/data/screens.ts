@@ -1,6 +1,7 @@
 import promptCrawlerPreview from '../assets/previews/prompt-crawler.webp'
 import decisionGridPreview from '../assets/previews/decision-grid.webp'
 import marketNeuralPreview from '../assets/previews/market-neural.webp'
+import vortexDeskPreview from '../assets/previews/vortex-desk.webp'
 
 export interface ScreenDefinition {
   id: string
@@ -63,11 +64,28 @@ export const screens: ScreenDefinition[] = [
     url: '/screens/market-neural',
     preview: marketNeuralPreview,
     date: '2026-10-24',
-    featured: true,
+    featured: false,
     highlights: [
       { value: '03', label: '融合球体' },
       { value: '06', label: '信号通道' },
       { value: '28s', label: '演示周期' },
+    ],
+  },
+  {
+    id: 'vortex-desk',
+    title: 'Vortex Desk',
+    subtitle: '粒子涡旋交易台 · 三维流光大屏',
+    description: '穿过高速旋转的彩色粒子涡旋，观察六个操作员的协作、证据矩阵、订单信号与代码执行。螺旋光带、底部喷射和实时数据流共同构成沉浸式交易终端。',
+    category: '粒子可视化',
+    tags: ['3D 粒子涡旋', '螺旋光带', '实时数据流'],
+    url: '/screens/vortex-desk',
+    preview: vortexDeskPreview,
+    date: '2026-10-24',
+    featured: true,
+    highlights: [
+      { value: '06', label: '协作操作员' },
+      { value: '05', label: '处理阶段' },
+      { value: '30s', label: '演示周期' },
     ],
   },
 ]

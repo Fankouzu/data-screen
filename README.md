@@ -6,6 +6,8 @@
 - **Decision Grid**：15 面空间数据墙、600 张决策卡片、流动光束、五阶段决策路径与 12 个业务案例，复刻第二段视频的决策网络效果。
 - **Market Neural**：2,151 个 XYZ 节点、6,174 条网格边、280 根动态触须，三球融合与分裂，六路输入信号和金融终端面板。详见 [视频分析与实现](docs/market-neural.md)。
 
+- **Vortex Desk**：彩色三维粒子龙卷、螺旋光带、底部喷射，联动六个操作员、证据矩阵、JSON 信号与代码日志。详见 [视频分析与实现](docs/vortex-desk.md)。
+
 ## 开发与生产构建
 
 推荐 Node.js 22 LTS（22.13+）或 Node.js 24 LTS。
@@ -24,7 +26,7 @@ npm run build      # 类型检查 + 生产构建，输出 dist/
 npm run preview    # 本地验证生产产物，默认 4173
 ```
 
-开发源码需由 Vite 运行；生产环境使用 `dist/`，不要直接打开源码 `index.html`。构建结果包含哈希资源文件和按路由拆分的 JS/CSS。WebGL 引擎保留 JavaScript 实现，入口通过 `engine.d.ts` 声明供 TypeScript 组件调用，并由 ESLint 与浏览器回归验证。
+开发源码需由 Vite 运行；生产环境使用 `dist/`，不要直接打开源码 `index.html`。构建结果包含哈希资源文件和按路由拆分的 JS/CSS。Prompt Crawler 的 WebGL 引擎保留 JavaScript 实现，入口通过 `engine.d.ts` 声明供 TypeScript 组件调用，并由 ESLint 与浏览器回归验证。
 
 ## 路由与组件
 
@@ -34,6 +36,7 @@ npm run preview    # 本地验证生产产物，默认 4173
 | `/#/screens/prompt-crawler` | 三维语义网络大屏 |
 | `/#/screens/decision-grid` | 三维决策网络大屏 |
 | `/#/screens/market-neural` | 三维金融信号网络大屏 |
+| `/#/screens/vortex-desk` | 彩色粒子涡旋交易台 |
 | 其他 hash 路由 | 404 页面 |
 
 采用 hash 路由，支持 CDN、对象存储、Nginx 和子目录托管，刷新深链接无需服务端重写。
@@ -58,9 +61,13 @@ src/
     MarketNeural.vue                    # 行情面板、六路信号和交互控制
     model.ts / engine.ts                # 模拟状态、球体融合与 XYZ 投影
     style.css                          # 金融终端响应式布局
+  dashboards/vortex-desk/
+    VortexDesk.vue                     # 操作员、信号流、代码和日志面板
+    model.ts / engine.ts                # 状态模型与三维粒子引擎
+    style.css                          # 全屏粒子场与浮层布局
   assets/previews/                     # 由 Vite 处理的预览资源
   styles/                             # 公共基础与索引样式
-tests/*.spec.ts                        # 三个大屏的浏览器端到端回归
+tests/*.spec.ts                        # 四个大屏的浏览器端到端回归
 deploy/nginx.conf                      # 容器生产服务配置
 Dockerfile                            # 多阶段构建
 .github/workflows/ci.yml               # 检查、测试、构建与产物归档
@@ -112,7 +119,7 @@ npm run test:e2e
 npm run check
 ```
 
-测试生产预览：三大屏索引的搜索/筛选/排序、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。Decision Grid 还验证 12 案例切换、五阶段推进，以及低于 0.85 置信度时的人工复核路径。Market Neural 验证完整融合周期、三种形态模式、暂停旋转和横竖屏布局边界。
+测试生产预览：四大屏索引的搜索/筛选/排序、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。Decision Grid 还验证 12 案例切换、五阶段推进，以及低于 0.85 置信度时的人工复核路径。Market Neural 验证完整融合周期、三种形态模式、暂停旋转和横竖屏布局边界。Vortex Desk 验证粒子深度与相机视差、五阶段与风险拦截、循环清理和响应式布局。
 
 如果本机已有 Chrome，也可以设置 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 为可执行文件路径。CI 使用 Playwright 官方 Chromium。推送 main 或打开 PR 后会运行 CI；成功构建的 `dist/` 可在 GitHub Actions artifacts 下载。CI 不自动发布外网。
 
@@ -149,6 +156,8 @@ Decision Grid：拖动或聚焦画布后按方向键旋转，滚轮缩放；选�
 
 Market Neural：默认 28 秒循环呈现分布 → 融合 → 统一 → 分裂，支持自动、合并、分裂三种视图。拖动或方向键旋转，滚轮或 `+` / `-` 缩放，`0` 重置；工具栏可暂停、倍速、重播、重置、全屏。桌面横竖屏填满视口，低于 860px 高的桌面保留滚动，手机采用纵向排布。
 
-三个大屏在系统减少动态效果时均默认暂停。新大屏无需增加依赖，使用 Canvas 2D 绘制真实 XYZ 几何的透视投影；离开页面会清理绘制循环、事件、纹理缓存及尺寸观察器。
+Vortex Desk：拖动或方向键调整三维涡旋视角，滚轮或 `+` / `-` 缩放，`0` 重置；工具栏支持暂停、倍速、重播和全屏。演示依次经过 OBSERVE → ANALYZE → RISK CHECK → EXECUTE → REPORT，风险状态与执行浮层联动。
+
+四个大屏在系统减少动态效果时均默认暂停。新大屏无需增加依赖，使用真实 XYZ 几何与透视投影；离开页面会清理绘制循环、事件、纹理缓存及尺寸观察器。
 
 目前使用模拟数据，无后台服务或凭据。WebGL 不可用时使用 Canvas 投影点云回退；全屏受浏览器权限限制。本次提供可部署工程和 CI 配置，不默认创建外部托管项目。
