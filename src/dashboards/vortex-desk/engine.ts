@@ -76,6 +76,9 @@ export function mountVortexDesk(canvas: HTMLCanvasElement, options: VortexOption
   }
   const gl = canvas.getContext('webgl', { alpha: false, antialias: false, depth: false, powerPreference: 'high-performance' });
   const ctx = gl ? null : canvas.getContext('2d');
+  const rendererInfo = gl?.getExtension('WEBGL_debug_renderer_info');
+  const softwareRenderer = rendererInfo && /swiftshader|llvmpipe|softpipe|software/i.test(String(gl!.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL)));
+  let quality = softwareRenderer ? .45 : 1, slowFrames = 0;
   let program: WebGLProgram | null = null, pointBuffer: WebGLBuffer | null = null, lineBuffer: WebGLBuffer | null = null;
   let seedLocation = 0, endLocation = 0;
   const uniforms: Record<string, WebGLUniformLocation | null> = {};
@@ -131,9 +134,17 @@ export function mountVortexDesk(canvas: HTMLCanvasElement, options: VortexOption
         gl.enableVertexAttribArray(seedLocation); gl.vertexAttribPointer(seedLocation, 4, gl.FLOAT, false, 20, 0);
         gl.enableVertexAttribArray(endLocation); gl.vertexAttribPointer(endLocation, 1, gl.FLOAT, false, 20, 16);
       };
-      bind(pointBuffer); gl.uniform1f(uniforms.Points ?? null, 1); gl.uniform1f(uniforms.Glow ?? null, 1); gl.drawArrays(gl.POINTS, 0, PARTICLES);
-      gl.uniform1f(uniforms.Glow ?? null, 0); gl.drawArrays(gl.POINTS, 0, PARTICLES);
-      bind(lineBuffer); gl.uniform1f(uniforms.Points ?? null, 0); gl.drawArrays(gl.LINES, 0, STRANDS * 2);
+      const density = quality * quality;
+      const drawPoints = () => {
+        if (quality === 1) gl.drawArrays(gl.POINTS, 0, PARTICLES);
+        // Keep all four particle populations when reducing GPU work.
+        else for (const [start, count] of [[0, 66000], [66000, 4000], [70000, 3500], [73500, 500]] as const) gl.drawArrays(gl.POINTS, start, Math.floor(count * density));
+      };
+      bind(pointBuffer); gl.uniform1f(uniforms.Points ?? null, 1); gl.uniform1f(uniforms.Glow ?? null, 1); drawPoints();
+      gl.uniform1f(uniforms.Glow ?? null, 0); drawPoints();
+      bind(lineBuffer); gl.uniform1f(uniforms.Points ?? null, 0);
+      gl.drawArrays(gl.LINES, 0, Math.floor(30000 * density) * 2);
+      gl.drawArrays(gl.LINES, 60000, Math.floor(2000 * density) * 2);
     } else if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, width, height); ctx.globalCompositeOperation = 'lighter';
       for (let bucket = 0; bucket < 20; bucket++) {
@@ -155,19 +166,25 @@ export function mountVortexDesk(canvas: HTMLCanvasElement, options: VortexOption
     frame = null;
     if (disposed || lost) return;
     if (!paused) {
-      const delta = last ? Math.max(0, Math.min(.05, (now - last) / 1000)) : 0;
-      time += delta * speed; if (delta > 0) fps += (1 / delta - fps) * .05;
+      const elapsed = last ? Math.max(0, (now - last) / 1000) : 0;
+      time += Math.min(1, elapsed) * speed;
+      if (elapsed > 0) fps += (Math.min(240, 1 / elapsed) - fps) * .05;
+      slowFrames = elapsed > .08 ? slowFrames + 1 : 0;
+      if (gl && slowFrames >= 4 && quality > .45) {
+        quality = quality > .65 ? .65 : .45;
+        slowFrames = 0; resize(false);
+      }
     }
     last = now; render();
     if (paused || time - notifyAt >= .1) emit();
     if (!paused) frame = requestAnimationFrame(tick);
   }
   function requestDraw() { if (!disposed && !lost && frame === null) frame = requestAnimationFrame(tick); }
-  function resize() {
-    const bounds = canvas.getBoundingClientRect(); width = Math.max(1, bounds.width); height = Math.max(1, bounds.height); dpr = Math.min(window.devicePixelRatio || 1, 1.75);
-    canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); requestDraw();
+  function resize(redraw = true) {
+    const bounds = canvas.getBoundingClientRect(); width = Math.max(1, bounds.width); height = Math.max(1, bounds.height); dpr = Math.min(window.devicePixelRatio || 1, 1.75) * quality;
+    canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); if (redraw) requestDraw();
   }
-  const observer = new ResizeObserver(resize); observer.observe(canvas);
+  const observer = new ResizeObserver(() => resize()); observer.observe(canvas);
   function pointerDown(event: PointerEvent) { drag = { id: event.pointerId, x: event.clientX, y: event.clientY }; canvas.setPointerCapture(event.pointerId); canvas.focus({ preventScroll: true }); }
   function pointerMove(event: PointerEvent) { if (!drag || drag.id !== event.pointerId) return; yaw += (event.clientX - drag.x) * .004; pitch = Math.max(-.45, Math.min(.45, pitch + (event.clientY - drag.y) * .002)); drag.x = event.clientX; drag.y = event.clientY; requestDraw(); }
   function pointerUp(event: PointerEvent) { if (drag?.id === event.pointerId) drag = null; }
@@ -183,6 +200,8 @@ export function mountVortexDesk(canvas: HTMLCanvasElement, options: VortexOption
   }
   function contextLost(event: Event) { event.preventDefault(); lost = true; if (frame !== null) cancelAnimationFrame(frame); frame = null; }
   function contextRestored() { if (disposed) return; lost = false; initGL(); last = 0; requestDraw(); }
+  function visibilityChanged() { last = 0; }
+  document.addEventListener('visibilitychange', visibilityChanged);
   canvas.addEventListener('pointerdown', pointerDown); canvas.addEventListener('pointermove', pointerMove); canvas.addEventListener('pointerup', pointerUp); canvas.addEventListener('pointercancel', pointerUp); canvas.addEventListener('lostpointercapture', pointerUp);
   canvas.addEventListener('wheel', wheel, { passive: false }); canvas.addEventListener('keydown', keydown); canvas.addEventListener('webglcontextlost', contextLost); canvas.addEventListener('webglcontextrestored', contextRestored);
   resize(); emit();
@@ -197,6 +216,7 @@ export function mountVortexDesk(canvas: HTMLCanvasElement, options: VortexOption
     },
     dispose() {
       disposed = true; if (frame !== null) cancelAnimationFrame(frame); frame = null; observer.disconnect();
+      document.removeEventListener('visibilitychange', visibilityChanged);
       canvas.removeEventListener('pointerdown', pointerDown); canvas.removeEventListener('pointermove', pointerMove); canvas.removeEventListener('pointerup', pointerUp); canvas.removeEventListener('pointercancel', pointerUp); canvas.removeEventListener('lostpointercapture', pointerUp); canvas.removeEventListener('wheel', wheel); canvas.removeEventListener('keydown', keydown); canvas.removeEventListener('webglcontextlost', contextLost); canvas.removeEventListener('webglcontextrestored', contextRestored);
       if (gl) { gl.deleteBuffer(pointBuffer); gl.deleteBuffer(lineBuffer); gl.deleteProgram(program); }
     },

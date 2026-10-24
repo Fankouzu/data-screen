@@ -6,6 +6,7 @@ declare global {
     vortexDesk?: VortexController;
     __vortexFrames?: Set<number>;
     __vortexNavigationSentinel?: string;
+    __advanceVortexFrame?: (timestamp: number) => void;
   }
 }
 
@@ -26,6 +27,29 @@ async function openVortex(page: Page) {
 }
 
 const snapshot = (page: Page) => page.evaluate(() => window.vortexDesk!.getDiagnostics());
+
+test('Vortex playback follows elapsed time when rendering falls to ten frames per second', async ({ page }) => {
+  await page.addInitScript(() => {
+    let next = 0;
+    const pending = new Map<number, FrameRequestCallback>();
+    window.requestAnimationFrame = callback => { pending.set(++next, callback); return next; };
+    window.cancelAnimationFrame = id => { pending.delete(id); };
+    window.__advanceVortexFrame = timestamp => {
+      const callbacks = [...pending.values()];
+      pending.clear();
+      callbacks.forEach(callback => callback(timestamp));
+    };
+  });
+  await page.goto('/#/screens/vortex-desk');
+  await page.waitForFunction(() => !!window.vortexDesk);
+  const elapsed = await page.evaluate(() => {
+    window.__advanceVortexFrame!(1000);
+    const before = window.vortexDesk!.getDiagnostics().time;
+    for (let i = 1; i <= 10; i++) window.__advanceVortexFrame!(1000 + i * 100);
+    return window.vortexDesk!.getDiagnostics().time - before;
+  });
+  expect(elapsed).toBeCloseTo(1, 5);
+});
 
 test('Vortex Desk deep links refresh and playback controls operate the real timeline', async ({ page }) => {
   await openVortex(page);
