@@ -4,6 +4,7 @@
 
 - **Prompt Crawler**：34,100 个真实 XYZ 粒子、WebGL 点线渲染、八阶段扫描与六块联动监测面板。
 - **Decision Grid**：15 面空间数据墙、600 张决策卡片、流动光束、五阶段决策路径与 12 个业务案例，复刻第二段视频的决策网络效果。
+- **Market Neural**：2,151 个 XYZ 节点、6,174 条网格边、280 根动态触须，三球融合与分裂，六路输入信号和金融终端面板。详见 [视频分析与实现](docs/market-neural.md)。
 
 ## 开发与生产构建
 
@@ -32,6 +33,7 @@ npm run preview    # 本地验证生产产物，默认 4173
 | `/#/` | 作品索引，支持搜索、分类与排序 |
 | `/#/screens/prompt-crawler` | 三维语义网络大屏 |
 | `/#/screens/decision-grid` | 三维决策网络大屏 |
+| `/#/screens/market-neural` | 三维金融信号网络大屏 |
 | 其他 hash 路由 | 404 页面 |
 
 采用 hash 路由，支持 CDN、对象存储、Nginx 和子目录托管，刷新深链接无需服务端重写。
@@ -52,9 +54,13 @@ src/
     DecisionGrid.vue                    # 指标、案例、监测面板与交互控制
     model.ts / engine.ts                # 决策状态与 XYZ 投影渲染
     style.css                          # 决策大屏独立样式
+  dashboards/market-neural/
+    MarketNeural.vue                    # 行情面板、六路信号和交互控制
+    model.ts / engine.ts                # 模拟状态、球体融合与 XYZ 投影
+    style.css                          # 金融终端响应式布局
   assets/previews/                     # 由 Vite 处理的预览资源
   styles/                             # 公共基础与索引样式
-tests/*.spec.ts                        # 两个大屏的浏览器端到端回归
+tests/*.spec.ts                        # 三个大屏的浏览器端到端回归
 deploy/nginx.conf                      # 容器生产服务配置
 Dockerfile                            # 多阶段构建
 .github/workflows/ci.yml               # 检查、测试、构建与产物归档
@@ -106,7 +112,7 @@ npm run test:e2e
 npm run check
 ```
 
-测试生产预览：双大屏索引的搜索/筛选/排序、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。Decision Grid 还验证 12 案例切换、五阶段推进，以及低于 0.85 置信度时的人工复核路径。
+测试生产预览：三大屏索引的搜索/筛选/排序、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。Decision Grid 还验证 12 案例切换、五阶段推进，以及低于 0.85 置信度时的人工复核路径。Market Neural 验证完整融合周期、三种形态模式、暂停旋转和横竖屏布局边界。
 
 如果本机已有 Chrome，也可以设置 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 为可执行文件路径。CI 使用 Playwright 官方 Chromium。推送 main 或打开 PR 后会运行 CI；成功构建的 `dist/` 可在 GitHub Actions artifacts 下载。CI 不自动发布外网。
 
@@ -141,6 +147,8 @@ Prompt Crawler：拖动旋转、Shift + 拖动平移、滚轮缩放；空间键�
 
 Decision Grid：拖动或聚焦画布后按方向键旋转，滚轮缩放；选择任意业务案例即可从 STATE 重新开始。每个案例依次经过 STATE → ASK → JEV → GATE → CODE，默认每 6 秒切换案例。`Ⅱ` 暂停、`1×` 切换速度、`↺` 重播当前案例、`⌖` 重置视角、`⛶` 全屏。暂停时可调整视角。界面显示的成本、延迟、置信度等均为视频风格的演示数值，并非实测服务表现；支持案例以 0.71 置信度展示 HOLD / human_gate 分支。
 
-两个大屏在系统减少动态效果时均默认暂停。新大屏无需增加依赖，使用 Canvas 2D 绘制真实 XYZ 几何的透视投影；离开页面会清理绘制循环、事件、纹理缓存及尺寸观察器。
+Market Neural：默认 28 秒循环呈现分布 → 融合 → 统一 → 分裂，支持自动、合并、分裂三种视图。拖动或方向键旋转，滚轮或 `+` / `-` 缩放，`0` 重置；工具栏可暂停、倍速、重播、重置、全屏。桌面横竖屏填满视口，低于 860px 高的桌面保留滚动，手机采用纵向排布。
+
+三个大屏在系统减少动态效果时均默认暂停。新大屏无需增加依赖，使用 Canvas 2D 绘制真实 XYZ 几何的透视投影；离开页面会清理绘制循环、事件、纹理缓存及尺寸观察器。
 
 目前使用模拟数据，无后台服务或凭据。WebGL 不可用时使用 Canvas 投影点云回退；全屏受浏览器权限限制。本次提供可部署工程和 CI 配置，不默认创建外部托管项目。

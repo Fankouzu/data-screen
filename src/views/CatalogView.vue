@@ -22,7 +22,7 @@ const matches = computed(() => {
     return (category.value === 'all' || screen.category === category.value) && (!query || text.includes(query))
   }).sort((a, b) => sort.value === 'name'
     ? a.title.localeCompare(b.title, 'zh-CN')
-    : b.date.localeCompare(a.date) || a.title.localeCompare(b.title, 'zh-CN'))
+    : b.date.localeCompare(a.date) || Number(b.featured) - Number(a.featured) || a.title.localeCompare(b.title, 'zh-CN'))
 })
 
 async function clearSearch() {

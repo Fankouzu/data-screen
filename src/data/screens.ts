@@ -1,5 +1,6 @@
 import promptCrawlerPreview from '../assets/previews/prompt-crawler.webp'
 import decisionGridPreview from '../assets/previews/decision-grid.webp'
+import marketNeuralPreview from '../assets/previews/market-neural.webp'
 
 export interface ScreenDefinition {
   id: string
@@ -45,11 +46,28 @@ export const screens: ScreenDefinition[] = [
     url: '/screens/decision-grid',
     preview: decisionGridPreview,
     date: '2026-10-24',
-    featured: true,
+    featured: false,
     highlights: [
       { value: '600', label: '空间节点' },
       { value: '15', label: '数据墙' },
       { value: '12', label: '业务案例' },
+    ],
+  },
+  {
+    id: 'market-neural',
+    title: 'Market Neural',
+    subtitle: '金融信号网络 · 三维神经球体大屏',
+    description: '观察高密度神经球体在市场信号中旋转、融合与分裂。三角网格、金色触须与蓝色数据流，联动行情、订单簿、成交记录和收益分布。',
+    category: '金融可视化',
+    tags: ['3D 神经球体', '形态融合', '行情监测'],
+    url: '/screens/market-neural',
+    preview: marketNeuralPreview,
+    date: '2026-10-24',
+    featured: true,
+    highlights: [
+      { value: '03', label: '融合球体' },
+      { value: '06', label: '信号通道' },
+      { value: '28s', label: '演示周期' },
     ],
   },
 ]

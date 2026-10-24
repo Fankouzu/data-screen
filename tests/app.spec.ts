@@ -68,13 +68,14 @@ test('an initial animation timestamp before mount cannot move the timeline below
 
 test('catalog search, categories, sorting and clear filters', async ({ page }) => {
   await page.goto('/#/');
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(2);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(3);
+  await expect(page.locator('#screen-grid .open-screen').first()).toHaveAttribute('href', '#/screens/market-neural');
   await page.locator('#search').fill('找不到的大屏-404');
   await expect(page.locator('#screen-grid .open-screen')).toHaveCount(0);
   await expect(page.locator('#empty-state')).toBeVisible();
   await page.locator('#clear-search').click();
   await expect(page.locator('#search')).toHaveValue('');
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(2);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(3);
   await page.locator('#search').fill('语义');
   await expect(page.locator('#screen-grid .open-screen')).toHaveCount(1);
   const category = page.locator('#categories button').filter({ hasText: '三维可视化' });
@@ -85,11 +86,16 @@ test('catalog search, categories, sorting and clear filters', async ({ page }) =
   await page.locator('#categories button').filter({ hasText: '全部' }).click();
   await expect(page.locator('#empty-state')).toBeHidden();
   await page.locator('#search').fill('');
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(2);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(3);
   await expect(page.locator('#screen-grid .open-screen').first()).toHaveAttribute('href', '#/screens/decision-grid');
+  await expect(page.locator('#screen-grid .open-screen').nth(1)).toHaveAttribute('href', '#/screens/market-neural');
+  await expect(page.locator('#screen-grid .open-screen').nth(2)).toHaveAttribute('href', '#/screens/prompt-crawler');
   await page.locator('#categories button').filter({ hasText: '决策可视化' }).click();
   await expect(page.locator('#screen-grid .open-screen')).toHaveCount(1);
   await expect(page.locator('#screen-grid .open-screen')).toHaveAttribute('href', '#/screens/decision-grid');
+  await page.locator('#categories button').filter({ hasText: '金融可视化' }).click();
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(1);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveAttribute('href', '#/screens/market-neural');
 });
 
 test('SPA navigation disposes the dashboard and its animation loop on every exit', async ({ page }) => {
