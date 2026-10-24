@@ -9,42 +9,47 @@ precision highp float;
 attribute vec4 aSeed;
 attribute float aEnd;
 uniform float uTime, uAspect, uSpread, uYaw, uPitch, uZoom, uDpr, uGlow;
+uniform mediump float uPoints;
 varying vec3 vColor;
 varying float vAlpha;
 vec3 hsv(vec3 c) { vec3 p=abs(fract(c.xxx+vec3(0.,2./3.,1./3.))*6.-3.); return c.z*mix(vec3(1.),clamp(p-1.,0.,1.),c.y); }
 void main() {
- float h=aSeed.x, theta=aSeed.y, seed=aSeed.z, kind=aSeed.w;
- float angle=theta+uTime*(1.8+1.2*(1.-h))+h*9.;
- float radius=(.012+pow(h,1.18)*1.08+.3*pow(h,4.))*uSpread;
- radius*=1.+.085*sin(h*17.-uTime*1.8)+.045*sin(h*47.+theta*3.-uTime*3.);
- float shell=.85+.16*seed;
- angle+=aEnd*(.012+.055*h)*(1.+seed);
- vec3 p=vec3(cos(angle)*radius*shell, .94-h*2.22, sin(angle)*radius*shell);
- p.x+=.075+.16*h*sin(h*3.5-uTime*.32)+.055*h*sin(h*10.+uTime*.25);
+ float h=fract(aSeed.x+uTime*.045), theta=aSeed.y, seed=aSeed.z, kind=aSeed.w;
+ float tail=aEnd*(.008+.022*h)*(1.+seed);
+ float angle=theta+uTime*(2.1+.7*(1.-h))+h*9.+tail;
+ h-=tail/17.;
+ h=max(0.,h);
+ float radius=(.01+pow(h,1.72)*1.08+.34*pow(h,5.))*uSpread;
+ radius*=1.+.65*exp(-pow((h-.16)/.10,2.));
+ radius*=1.+.045*sin(h*15.-uTime*1.4)+.025*sin(h*31.+angle*2.-uTime);
+ float shell=.94+.06*seed;
+ float x=cos(angle)*radius*shell, z=sin(angle)*radius*shell;
+ vec3 p=vec3(x+.04-.32*h*h+.04*h+.045*exp(-pow((h-.20)/.15,2.))+.10*sin(h*3.14159)*exp(-2.*h)+.055*h*sin(h*4.-uTime*.45), .94-h*2.22-.18*x-.40*z, z);
  if(kind>1.5) {
    float cycle=fract(seed+uTime*.32);
    float reach=pow(cycle,.8)*1.7;
    p=vec3(cos(theta)*reach,.94-sin(cycle*3.14159)*(.04+.16*seed),sin(theta)*reach*.56);
-   p.x+=.075; p.y-=aEnd*.008; p.x+=aEnd*cos(theta)*.04; p.z+=aEnd*sin(theta)*.04;
+   p.x+=.04; p.y-=aEnd*.008; p.x+=aEnd*cos(theta)*.04; p.z+=aEnd*sin(theta)*.04;
  } else if(kind>.5) {
-   p.x+=cos(theta)*seed*.4; p.z+=sin(theta)*seed*.4;
+   p.x+=cos(angle)*seed*.35; p.z+=sin(angle)*seed*.35;
  }
- if(kind>2.5) { p=vec3(.075+cos(theta)*seed*.035,.94-sin(theta)*seed*.012,sin(theta)*seed*.035); }
+ if(kind>2.5) { p=vec3(.04+cos(theta)*seed*.025,.94-sin(theta)*seed*.008,sin(theta)*seed*.025); }
  float cy=cos(uYaw), sy=sin(uYaw), cp=cos(uPitch), sp=sin(uPitch);
  p.xz=mat2(cy,-sy,sy,cy)*p.xz;
  p.yz=mat2(cp,-sp,sp,cp)*p.yz;
  float perspective=4.8/(4.8+p.z);
  gl_Position=vec4(p.x*perspective*uZoom/uAspect,-p.y*perspective*uZoom,0.,1.);
- float band=pow(.5+.5*sin(h*45.+theta*2.-uTime*2.4),9.);
- float hue=fract(.33+h*.54+uTime/15.+.06*sin(theta)+seed*.045);
- vColor=hsv(vec3(hue,.74,1.));
- vColor=mix(vColor,vec3(1.),band*.78);
- vAlpha=(.36+seed*.43+band*.9)*(p.z<0.?1.:.56);
- if(kind>.5) vAlpha*=.85;
- if(kind>1.5) { vColor=hsv(vec3(fract(.45+uTime/15.+seed*.13),.8,1.)); vAlpha=(1.-fract(seed+uTime*.32))*.64; }
- gl_PointSize=(1.0+seed*1.5+band)*uDpr*perspective;
- if(kind>2.5) { vColor=mix(hsv(vec3(fract(.33+uTime/15.),.8,1.)),vec3(1.),.55); vAlpha=.5; gl_PointSize=(5.+seed*8.)*uDpr; }
- if(uGlow>.5) { gl_PointSize*=7.; vAlpha*=.19; }
+ float band=pow(.5+.5*cos(angle*2.+h*34.+uTime*1.2),4.);
+ float hue=fract(.05+uTime/5.+pow(h,.82)*.68+.22*h*cos(angle)+seed*.015);
+ vColor=hsv(vec3(hue,.88,1.));
+ vColor=mix(vColor,vec3(1.),band*.4);
+ vAlpha=(.42+seed*.25+band*.95)*(p.z<0.?1.:.24);
+ if(uPoints<.5) vAlpha*=1.5;
+ if(kind>.5) vAlpha*=.7;
+ if(kind>1.5) { vColor=hsv(vec3(fract(.05+uTime/5.+cos(theta)*.06+seed*.025),.85,1.)); vAlpha=(1.-fract(seed+uTime*.32))*.64; }
+ gl_PointSize=(1.+seed*1.4+band*.3)*uDpr*perspective;
+ if(kind>2.5) { vColor=mix(hsv(vec3(fract(.05+uTime/5.),.85,1.)),vec3(1.),.3); vAlpha=.36; gl_PointSize=(3.+seed*6.)*uDpr; }
+ if(uGlow>.5) { gl_PointSize*=7.; vAlpha*=.20; }
 }
 `;
 const fragmentSource = `
@@ -106,11 +111,17 @@ export function mountVortexDesk(canvas: HTMLCanvasElement, options: VortexOption
   }
   initGL();
   const spread = () => Math.min(1.5, Math.max(.7, width / height));
-  function position(h: number, theta: number, seed: number) {
-    const angle = theta + time * (1.8 + 1.2 * (1 - h)) + h * 9;
-    const radius = (.012 + h ** 1.18 * 1.08 + .3 * h ** 4) * spread() * (1 + .085 * Math.sin(h * 17 - time * 1.8) + .045 * Math.sin(h * 47 + theta * 3 - time * 3)) * (.85 + .16 * seed);
-    return { x: Math.cos(angle) * radius + .075 + .16 * h * Math.sin(h * 3.5 - time * .32) + .055 * h * Math.sin(h * 10 + time * .25), y: .94 - h * 2.22, z: Math.sin(angle) * radius };
+  // Keep geometry in sync with the shader for the Canvas fallback and camera probes.
+  function position(height: number, theta: number, seed: number, endpoint = 0) {
+    let h = (height + time * .045) % 1;
+    const tail = endpoint * (.008 + .022 * h) * (1 + seed);
+    const angle = theta + time * (2.1 + .7 * (1 - h)) + h * 9 + tail;
+    h = Math.max(0, h - tail / 17);
+    const radius = (.01 + h ** 1.72 * 1.08 + .34 * h ** 5) * spread() * (1 + .65 * Math.exp(-(((h - .16) / .10) ** 2))) * (1 + .045 * Math.sin(h * 15 - time * 1.4) + .025 * Math.sin(h * 31 + angle * 2 - time)) * (.94 + .06 * seed);
+    const x = Math.cos(angle) * radius, z = Math.sin(angle) * radius;
+    return { x: x + .04 - .32 * h * h + .04 * h + .045 * Math.exp(-(((h - .20) / .15) ** 2)) + .10 * Math.sin(h * Math.PI) * Math.exp(-2 * h) + .055 * h * Math.sin(h * 4 - time * .45), y: .94 - h * 2.22 - .18 * x - .40 * z, z };
   }
+
   function project(p: { x: number; y: number; z: number }) {
     const x = Math.cos(yaw) * p.x + Math.sin(yaw) * p.z;
     const z = -Math.sin(yaw) * p.x + Math.cos(yaw) * p.z;
@@ -147,17 +158,21 @@ export function mountVortexDesk(canvas: HTMLCanvasElement, options: VortexOption
       gl.drawArrays(gl.LINES, 60000, Math.floor(2000 * density) * 2);
     } else if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, width, height); ctx.globalCompositeOperation = 'lighter';
-      for (let bucket = 0; bucket < 20; bucket++) {
-        ctx.strokeStyle = `hsla(${(170 + bucket * 10 + time * 24) % 360},95%,65%,.48)`; ctx.lineWidth = .7; ctx.beginPath();
-        for (let i = bucket; i < 18000; i += 20) {
-          const index = i * 10, h = lines[index]!, angle = lines[index + 1]!, seed = lines[index + 2]!;
-          const a = project(position(h, angle, seed)), b = project(position(h, angle + (.012 + .055 * h) * (1 + seed), seed));
-          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-        }
-        ctx.stroke();
+      const paths = Array.from({ length: 36 }, () => new Path2D());
+      for (let i = 0; i < 18000; i++) {
+        const index = i * 10, heightSeed = lines[index]!, theta = lines[index + 1]!, seed = lines[index + 2]!;
+        const h = (heightSeed + time * .045) % 1;
+        const angle = theta + time * (2.1 + .7 * (1 - h)) + h * 9;
+        const hue = (.05 + time / 5 + h ** .82 * .68 + .22 * h * Math.cos(angle) + seed * .015) % 1;
+        const path = paths[Math.floor(hue * paths.length)]!;
+        const a = project(position(heightSeed, theta, seed)), b = project(position(heightSeed, theta, seed, 1));
+        path.moveTo(a.x, a.y); path.lineTo(b.x, b.y);
       }
-      const base = project({ x: .075, y: .94, z: 0 }), glow = ctx.createRadialGradient(base.x, base.y, 0, base.x, base.y, height * .1);
-      glow.addColorStop(0, '#fff'); glow.addColorStop(.08, '#98fff6'); glow.addColorStop(.3, '#00bdab55'); glow.addColorStop(1, '#0000'); ctx.fillStyle = glow; ctx.fillRect(0, 0, width, height);
+      ctx.lineWidth = .7;
+      paths.forEach((path, bucket) => { ctx.strokeStyle = `hsla(${bucket * 10},95%,65%,.65)`; ctx.stroke(path); });
+      const base = project({ x: .04, y: .94, z: 0 }), glow = ctx.createRadialGradient(base.x, base.y, 0, base.x, base.y, height * .1);
+      const groundHue = ((.05 + time / 5) % 1) * 360;
+      glow.addColorStop(0, '#fff'); glow.addColorStop(.08, `hsl(${groundHue},95%,80%)`); glow.addColorStop(.3, `hsla(${groundHue},95%,55%,.33)`); glow.addColorStop(1, '#0000'); ctx.fillStyle = glow; ctx.fillRect(0, 0, width, height);
     }
     frames++; options.onFrame?.(time);
   }
