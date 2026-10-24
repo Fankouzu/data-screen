@@ -121,9 +121,28 @@ npm run check
 
 测试生产预览：四大屏索引的搜索/筛选/排序、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。Decision Grid 还验证 12 案例切换、五阶段推进，以及低于 0.85 置信度时的人工复核路径。Market Neural 验证完整融合周期、三种形态模式、暂停旋转和横竖屏布局边界。Vortex Desk 验证粒子深度与相机视差、五阶段与风险拦截、循环清理和响应式布局。
 
-如果本机已有 Chrome，也可以设置 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 为可执行文件路径。CI 使用 Playwright 官方 Chromium。推送 main 或打开 PR 后会运行 CI；成功构建的 `dist/` 可在 GitHub Actions artifacts 下载。CI 不自动发布外网。
+如果本机已有 Chrome，也可以设置 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 为可执行文件路径。CI 使用 Playwright 官方 Chromium。推送 main 或打开 PR 后会运行 CI；成功构建的 `dist/` 可在 GitHub Actions artifacts 下载。Cloudflare Pages 的 Git 集成独立执行构建与发布，不等待 GitHub CI 完成。
 
 ## 部署
+
+### Cloudflare Pages（生产环境）
+
+公网地址：**https://data-screen-6zn.pages.dev/**
+
+项目 `data-screen` 已连接 GitHub 仓库 `mzlc-linmo/data-screen`。推送 `main` 会自动构建并更新生产站点；其他分支的构建可用于预览。GitHub 仓库保持私有，公网仅提供 `dist/` 中的前端产物。
+
+| 配置项 | 值 |
+| --- | --- |
+| 生产分支 | `main` |
+| 根目录 | 仓库根目录 |
+| 构建命令 | `npm run build` |
+| 构建输出目录 | `dist` |
+| 环境变量 | `NODE_VERSION=24` |
+| 资源基础路径 | `/`（默认，不设置 `VITE_BASE_PATH`） |
+
+Cloudflare 自动安装锁文件中的依赖。使用现有 GitHub App 集成，不需要在仓库或 GitHub Actions 中保存 Cloudflare API Token。Hash 路由支持直接打开及刷新四个大屏，无需服务端路由规则。
+
+部署状态、日志及回滚入口位于 Cloudflare → Workers 和 Pages → `data-screen` → 部署。发布失败时先查看构建日志；需要回退时，可将之前的成功生产部署回滚。添加新大屏后提交并推送 `main` 即可发布。
 
 ### Vercel / Netlify / 静态托管
 
@@ -160,4 +179,4 @@ Vortex Desk：拖动或方向键调整三维涡旋视角，滚轮或 `+` / `-` �
 
 四个大屏在系统减少动态效果时均默认暂停。新大屏无需增加依赖，使用真实 XYZ 几何与透视投影；离开页面会清理绘制循环、事件、纹理缓存及尺寸观察器。
 
-目前使用模拟数据，无后台服务或凭据。WebGL 不可用时使用 Canvas 投影点云回退；全屏受浏览器权限限制。本次提供可部署工程和 CI 配置，不默认创建外部托管项目。
+目前使用模拟数据，无后台服务或凭据。WebGL 不可用时使用 Canvas 投影点云回退；全屏受浏览器权限限制。生产站点由 Cloudflare Pages 托管。
