@@ -204,7 +204,7 @@ test('Knowledge Engine cancels its rendering loop and releases its controller on
     });
     expect(result).toEqual({ rendered: 1, frames: 1 });
     await page.getByRole('link', { name: '返回大屏索引' }).press('Enter');
-    await expect(page.locator('#screen-grid .open-screen')).toHaveCount(6);
+    await expect(page.locator('#screen-grid .open-screen')).toHaveCount(7);
     const disposed = await page.evaluate(() => ({ controller: typeof window.knowledgeEngine, frames: window.__knowledgeFrames!.size, disposed: window.__retiredKnowledge!.debug().disposed }));
     expect(disposed).toEqual({ controller: 'undefined', frames: 0, disposed: true });
     await expect(page.locator('canvas')).toHaveCount(0);
@@ -311,7 +311,7 @@ test('Canvas node picking opens its source details and pending focus frames are 
   await expect(page.locator('.ke-floating-inspector strong')).toHaveText('raw/source-042.pdf');
   expect(await page.evaluate(() => window.knowledgeEngine!.debug().activeFrame)).toBe(true);
   await page.getByRole('link', { name: '返回大屏索引' }).press('Enter');
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(6);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(7);
   expect(await page.evaluate(() => window.__knowledgeFrames!.size)).toBe(0);
   expect(await page.evaluate(() => typeof window.knowledgeEngine)).toBe('undefined');
 });

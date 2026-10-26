@@ -4,6 +4,7 @@ import marketNeuralPreview from '../assets/previews/market-neural.webp'
 import vortexDeskPreview from '../assets/previews/vortex-desk.webp'
 import signalLoomPreview from '../assets/previews/signal-loom.webp'
 import knowledgeEnginePreview from '../assets/previews/knowledge-engine.webp'
+import reaLabPreview from '../assets/previews/rea-lab.webp'
 
 export interface ScreenDefinition {
   id: string
@@ -117,11 +118,28 @@ export const screens: ScreenDefinition[] = [
     url: '/screens/knowledge-engine',
     preview: knowledgeEnginePreview,
     date: '2026-10-26',
-    featured: true,
+    featured: false,
     highlights: [
       { value: '12', label: '知识页面' },
       { value: '3,206', label: '图谱节点' },
       { value: '24s', label: '演示周期' },
+    ],
+  },
+  {
+    id: 'rea-lab',
+    title: 'Rea Lab',
+    subtitle: '逆向工程实验室 · 双侧编译网络',
+    description: '在白色实验终端中穿过暖色反汇编网络与青蓝色反编译网络。双侧弯曲指令带交换高速数据，镜头依次巡游两侧，观察相位同步、代码生成与最终解析结果。',
+    category: '工程可视化',
+    tags: ['双侧网络', '指令频谱', '相位同步'],
+    url: '/screens/rea-lab',
+    preview: reaLabPreview,
+    date: '2026-10-26',
+    featured: true,
+    highlights: [
+      { value: '64 + 16', label: '协作代理' },
+      { value: '05', label: '解析阶段' },
+      { value: '1,536', label: '提升指令' },
     ],
   },
 ]
