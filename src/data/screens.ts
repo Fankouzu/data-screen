@@ -2,6 +2,7 @@ import promptCrawlerPreview from '../assets/previews/prompt-crawler.webp'
 import decisionGridPreview from '../assets/previews/decision-grid.webp'
 import marketNeuralPreview from '../assets/previews/market-neural.webp'
 import vortexDeskPreview from '../assets/previews/vortex-desk.webp'
+import signalLoomPreview from '../assets/previews/signal-loom.webp'
 
 export interface ScreenDefinition {
   id: string
@@ -81,11 +82,28 @@ export const screens: ScreenDefinition[] = [
     url: '/screens/vortex-desk',
     preview: vortexDeskPreview,
     date: '2026-10-24',
-    featured: true,
+    featured: false,
     highlights: [
       { value: '06', label: '协作操作员' },
       { value: '05', label: '处理阶段' },
       { value: '30s', label: '演示周期' },
+    ],
+  },
+  {
+    id: 'signal-loom',
+    title: 'Signal Loom',
+    subtitle: '三维信号织机 · 多路推理数据流',
+    description: '青、粉、金三路信号穿过发光丝束，织入立体二进制矩阵。跟随六段镜头巡游，观察十二种场景的推理、门控与执行，联动信号流、置信曲线和动作矩阵。',
+    category: '信号可视化',
+    tags: ['3D 数字矩阵', '流光丝束', '镜头巡游'],
+    url: '/screens/signal-loom',
+    preview: signalLoomPreview,
+    date: '2026-10-26',
+    featured: true,
+    highlights: [
+      { value: '03', label: '信号通道' },
+      { value: '12', label: '业务场景' },
+      { value: '06', label: '巡游视角' },
     ],
   },
 ]

@@ -71,7 +71,7 @@ test('Vortex Desk deep links refresh and playback controls operate the real time
   expect((await snapshot(page)).phase).toBe('OBSERVE');
   expect((await snapshot(page)).paused).toBe(true);
   await page.locator('a[href="#/"]').first().click();
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(4);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(5);
 });
 
 test('Vortex particles occupy XYZ space and paused dragging creates depth parallax', async ({ page }) => {
@@ -216,7 +216,7 @@ test('Vortex Desk fits desktop viewports and reduced-motion mobile controls rema
   await page.getByRole('button', { name: '暂停动画', exact: true }).click();
   expect((await snapshot(page)).paused).toBe(true);
   await page.locator('a[href="#/"]').first().click();
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(4);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
