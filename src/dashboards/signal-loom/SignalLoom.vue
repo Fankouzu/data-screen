@@ -2,12 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { mountSignalLoom } from './engine';
+import SignalOverlays from './SignalOverlays.vue';
 import { initialSignalSnapshot, type SignalController, type SignalSnapshot } from './model';
 import './style.css';
 
 declare global { interface Window { signalLoom?: SignalController } }
 const root = ref<HTMLElement>();
 const canvas = ref<HTMLCanvasElement>();
+const overlays = ref<InstanceType<typeof SignalOverlays>>();
 const snapshot = ref<SignalSnapshot>({ ...initialSignalSnapshot });
 const notice = ref('');
 let controller: SignalController | undefined;
@@ -89,7 +91,7 @@ async function fullscreen() { try { if (document.fullscreenElement) await docume
 onMounted(() => {
   if (!canvas.value) return;
   motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  controller = mountSignalLoom(canvas.value, { initialPaused: motion.matches, onUpdate: next => {
+  controller = mountSignalLoom(canvas.value, { initialPaused: motion.matches, onOverlay: items => overlays.value?.update(items), onUpdate: next => {
     // The scene runs every frame; dense terminal panels only need twelve updates per second.
     if (Math.abs(next.time - lastUpdate) >= 1 / 12 || next.paused !== snapshot.value.paused || next.speed !== snapshot.value.speed || next.time < lastUpdate) { snapshot.value = next; lastUpdate = next.time; }
   } });
@@ -109,7 +111,7 @@ onBeforeUnmount(() => { motion?.removeEventListener('change', onMotionChange); c
       <article><h2>CONFIDENCE · LIVE</h2><div class="sl-confidence"><strong>{{ snapshot.confidence.toFixed(2) }}</strong><b :class="{ hold: snapshot.confidence < .85 }">{{ snapshot.confidence >= .85 ? 'PASS' : 'HOLD' }}</b></div><div class="sl-meter sl-threshold"><i :style="{ width: `${snapshot.confidence * 100}%` }"></i><b></b></div><small>calibrate on yours <span>gate 0.85</span></small></article>
     </section>
     <section class="sl-case" aria-label="当前演示案例"><div><b class="sl-case-number">CASE {{ String(snapshot.caseIndex + 1).padStart(2, '0') }} / 12</b><h2>{{ current[0] }}</h2><nav aria-label="决策阶段"><span v-for="phase in phases" :key="phase" :class="{ active: snapshot.phase === phase }" :aria-current="snapshot.phase === phase ? 'step' : undefined">{{ phase }}</span></nav></div><p>{{ current[1] }} {{ snapshot.confidence.toFixed(2) }} <span>→ {{ current[2] }}</span></p></section>
-    <section class="sl-scene" aria-label="三维信号织机"><canvas ref="canvas" tabindex="0" aria-label="三维二进制信号织机，拖动或方向键旋转，滚轮缩放"></canvas><div class="sl-corner sl-corner-tl"></div><div class="sl-corner sl-corner-tr"></div><div class="sl-corner sl-corner-bl"></div><div class="sl-corner sl-corner-br"></div><div class="sl-label sl-choice"><b>CHOICE</b><small>pick one label · 2 ms</small></div><div class="sl-label sl-score"><b>SCORE</b><small>ordered labels · 3 ms</small></div><div class="sl-label sl-noul"><b>NOUL</b><small>yes / no · 4 ms</small></div><div class="sl-label sl-packet"><b>PKT 0x{{ (25111100 + step).toString(16).toUpperCase() }}</b><small>noul · 9 bits · {{ snapshot.confidence.toFixed(2) }}</small></div><div class="sl-camera"><i></i> CAM {{ String(Math.floor(snapshot.time / 4.5) % 6 + 1).padStart(2, '0') }} · {{ snapshot.camera }}</div><span class="sl-scene-state">{{ snapshot.paused ? 'PAUSED' : 'SIMULATION' }} · {{ Math.round(snapshot.fps) }} FPS</span></section>
+    <section class="sl-scene" aria-label="三维信号织机"><canvas ref="canvas" tabindex="0" aria-label="三维二进制信号织机，拖动或方向键旋转，滚轮缩放"></canvas><div class="sl-corner sl-corner-tl"></div><div class="sl-corner sl-corner-tr"></div><div class="sl-corner sl-corner-bl"></div><div class="sl-corner sl-corner-br"></div><SignalOverlays ref="overlays"/><div class="sl-camera"><i></i> CAM {{ String(Math.floor(snapshot.time / 4.5) % 6 + 1).padStart(2, '0') }} · {{ snapshot.camera }}</div><span class="sl-scene-state">{{ snapshot.paused ? 'PAUSED' : 'SIMULATION' }} · {{ Math.round(snapshot.fps) }} FPS</span></section>
     <section class="sl-telemetry" aria-label="信号遥测">
       <article class="sl-panel sl-streams"><h2>STREAMS · IN <span>3 heads</span></h2><div v-for="stream in streams" :key="stream.name" class="sl-stream" :style="{ '--stream': stream.color }"><div><b>{{ stream.name }}</b><strong>{{ stream.rate }}/s</strong></div><div class="sl-stream-bars"><i v-for="(opacity, i) in stream.bars" :key="i" :style="{ opacity }"></i></div></div><small>Choice · Score · Noul in parallel</small></article>
       <article class="sl-panel sl-waves"><h2>CONFIDENCE STREAM <span>SIM</span></h2><svg viewBox="0 0 180 82" preserveAspectRatio="none" role="img" aria-label="Choice、Score、Noul 三路置信度波形"><path d="M0 15H180M0 41H180M0 67H180M0 0V82M45 0V82M90 0V82M135 0V82M180 0V82" class="sl-grid"/><path d="M0 23H180" class="sl-gate-line"/><polyline v-for="line in waveLines" :key="line.color" :points="line.points" :stroke="line.color"/><text x="161" y="20">0.85</text></svg><div class="sl-wave-legend"><span>Choice</span><span>Score</span><span>Noul</span><small>under → human</small></div></article>

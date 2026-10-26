@@ -23,6 +23,116 @@ async function open(page: Page) {
 }
 const state = (page: Page) => page.evaluate(() => window.signalLoom!.getSnapshot());
 
+async function openWithControlledFrames(page: Page) {
+  await page.addInitScript(() => {
+    let next = 0;
+    const pending = new Map<number, FrameRequestCallback>();
+    window.requestAnimationFrame = callback => { pending.set(++next, callback); return next; };
+    window.cancelAnimationFrame = id => { pending.delete(id); };
+    window.__stepLoom = timestamp => {
+      const callbacks = [...pending.values()];
+      pending.clear();
+      callbacks.forEach(callback => callback(timestamp));
+    };
+  });
+  await open(page);
+}
+
+test('Signal Loom rapidly transports the same data packets continuously into the right matrix', async ({ page }) => {
+  await openWithControlledFrames(page);
+  const result = await page.evaluate(() => {
+    const controller = window.signalLoom!;
+    controller.restart();
+    const start = performance.now();
+    window.__stepLoom!(start);
+    const initial = controller.debug().flow;
+    const tracked = initial.find(packet => packet.head === 0 && packet.progress < .05)!;
+    const path = [{ elapsed: 0, ...tracked }];
+    let after100ms = initial;
+    for (let step = 1; step <= 40; step++) {
+      window.__stepLoom!(start + step * 20);
+      const flow = controller.debug().flow;
+      if (step === 5) after100ms = flow;
+      const samePacket = flow.find(packet => packet.id === tracked.id);
+      if (samePacket) path.push({ elapsed: step * .02, ...samePacket });
+    }
+    controller.setPaused(true);
+    return { initial, after100ms, path };
+  });
+  for (const head of [0, 1, 2]) {
+    const first = result.initial.find(packet => packet.head === head && packet.progress < .5)!;
+    const next = result.after100ms.find(packet => packet.id === first.id)!;
+    expect(next, `Channel ${head} retains packet identity while travelling`).toBeDefined();
+    expect(next.world[0] - first.world[0]).toBeGreaterThan(.08);
+  }
+  expect(result.path.length).toBeGreaterThan(30);
+  expect(result.path[0]!.world[0]).toBeLessThan(-.65);
+  expect(result.path.at(-1)!.world[0]).toBeGreaterThan(3.2);
+  expect(result.path.at(-1)!.elapsed).toBeLessThan(1);
+  for (let i = 1; i < result.path.length; i++) {
+    const previous = result.path[i - 1]!.world;
+    const current = result.path[i]!.world;
+    expect(current[0]).toBeGreaterThanOrEqual(previous[0]);
+    expect(Math.hypot(...current.map((value, axis) => value - previous[axis]!))).toBeLessThan(.45);
+  }
+});
+
+test('Signal Loom cards move with their packets, follow the paused camera and expire before replacement', async ({ page }) => {
+  await openWithControlledFrames(page);
+  const movement = await page.evaluate(() => {
+    const controller = window.signalLoom!;
+    controller.restart();
+    const start = performance.now();
+    window.__stepLoom!(start + 200);
+    const before = controller.debug().overlays.find(item => item.kind === 'packet' && item.head === 0)!;
+    window.__stepLoom!(start + 300);
+    controller.setPaused(true);
+    return { before, after: controller.debug().overlays.find(item => item.id === before.id)! };
+  });
+  expect(movement.after.id).toBe(movement.before.id);
+  expect(Math.hypot(movement.after.x - movement.before.x, movement.after.y - movement.before.y)).toBeGreaterThan(5);
+  const card = page.locator(`[data-overlay-id="${movement.after.id}"]`);
+  await expect(card).toBeVisible();
+  const renderedCenter = () => card.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    const scene = element.closest('.sl-scene')!.getBoundingClientRect();
+    return { x: bounds.x + bounds.width / 2 - scene.x, y: bounds.y + bounds.height / 2 - scene.y };
+  });
+  await expect.poll(async () => {
+    const center = await renderedCenter();
+    return Math.hypot(center.x - movement.after.x, center.y - movement.after.y);
+  }).toBeLessThan(1);
+  const paused = await page.evaluate(() => ({ time: window.signalLoom!.getSnapshot().time, debug: window.signalLoom!.debug() }));
+  await page.evaluate(() => window.__stepLoom!(performance.now() + 5000));
+  expect((await state(page)).time).toBe(paused.time);
+  expect(await page.evaluate(() => window.signalLoom!.debug().overlays)).toEqual(paused.debug.overlays);
+  await page.locator('canvas').first().press('ArrowRight');
+  const rotated = await page.evaluate(() => window.signalLoom!.debug());
+  const projected = rotated.overlays.find(item => item.id === movement.after.id)!;
+  expect(rotated.flow.map(packet => ({ id: packet.id, world: packet.world }))).toEqual(paused.debug.flow.map(packet => ({ id: packet.id, world: packet.world })));
+  expect(Math.hypot(projected.x - movement.after.x, projected.y - movement.after.y)).toBeGreaterThan(1);
+  expect((await state(page)).time).toBe(paused.time);
+  await expect.poll(async () => {
+    const center = await renderedCenter();
+    return Math.hypot(center.x - projected.x, center.y - projected.y);
+  }).toBeLessThan(1);
+  const lifecycle = await page.evaluate(() => {
+    const controller = window.signalLoom!;
+    controller.setPaused(false);
+    const start = performance.now();
+    window.__stepLoom!(start + 1000);
+    const gap = controller.debug().overlays;
+    window.__stepLoom!(start + 1550);
+    controller.setPaused(true);
+    return { gap, next: controller.debug().overlays, time: controller.getSnapshot().time };
+  });
+  expect(lifecycle.gap.some(item => item.id === movement.after.id)).toBe(false);
+  expect(lifecycle.next.some(item => item.id === movement.after.id)).toBe(false);
+  expect(lifecycle.next.some(item => item.kind === 'packet' && item.head === 0)).toBe(true);
+  expect(lifecycle.time - paused.time).toBeCloseTo(1.55, 2);
+  await expect(card).toHaveCount(0);
+});
+
 test('Signal Loom deep link refresh, pause, speed and replay work', async ({ page }) => {
   await open(page);
   await page.reload();

@@ -11,8 +11,23 @@ export interface SignalSnapshot {
   latency: number;
 }
 
+export interface SignalOverlay {
+  id: string;
+  kind: 'source' | 'packet';
+  head: number;
+  title: string;
+  detail: string;
+  x: number;
+  y: number;
+  scale: number;
+  opacity: number;
+}
+
 export interface SignalDiagnostics {
   pointCount: number;
+  strandCount: number;
+  flow: { id: string; head: number; progress: number; world: [number, number, number]; screen: [number, number] }[];
+  overlays: SignalOverlay[];
   depthRange: { min: number; max: number };
   rotation: { yaw: number; pitch: number; zoom: number };
   disposed: boolean;
@@ -35,6 +50,7 @@ export interface SignalController {
 export interface SignalOptions {
   initialPaused?: boolean;
   onUpdate(snapshot: SignalSnapshot): void;
+  onOverlay?(items: SignalOverlay[]): void;
 }
 
 export const initialSignalSnapshot: SignalSnapshot = {

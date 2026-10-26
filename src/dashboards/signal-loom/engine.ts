@@ -1,4 +1,4 @@
-import { type SignalController, type SignalOptions, type SignalSnapshot } from './model';
+import { type SignalController, type SignalOptions, type SignalSnapshot, type SignalOverlay } from './model';
 
 type Vec3 = [number, number, number];
 type Color = [number, number, number];
@@ -11,6 +11,9 @@ const random = (n: number) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.54
 const smooth = (n: number) => n * n * (3 - 2 * n);
 const headY = [-1.03, .03, 1.03];
 const sourceX = -.78;
+const rowsPerSheet = 32;
+const strandsPerHead = rowsPerSheet * 3;
+const flowRate = 1.25;
 
 function curve(strand: Strand, t: number): Vec3 {
   const a = 1 - t;
@@ -18,9 +21,16 @@ function curve(strand: Strand, t: number): Vec3 {
   const [ex, ey, ez] = strand.end;
   return [
     a * a * a * sourceX + 3 * a * a * t * -.50 + 3 * a * t * t * -.30 + t * t * t * ex,
-    a * a * a * y + 3 * a * a * t * (y - .08) + 3 * a * t * t * (ey * 1.3) + t * t * t * ey,
-    3 * a * a * t * ez * .38 + 3 * a * t * t * ez * 1.2 + t * t * t * ez,
+    a * a * a * y + 3 * a * a * t * y + 3 * a * t * t * ey + t * t * t * ey,
+    3 * a * t * t * ez + t * t * t * ez,
   ];
+}
+
+// One route continues from the source, through the loom gate, into the output matrix.
+function dataPath(strand: Strand, progress: number): Vec3 {
+  if (progress <= .48) return curve(strand, progress / .48);
+  const t = (progress - .48) / .52;
+  return [strand.end[0] + t * (3.5 - strand.end[0]), strand.end[1], strand.end[2]];
 }
 
 const vertexSource = `
@@ -181,20 +191,16 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     add(points, [-2.65 + random(i) * 3.3, -1.85 + random(i + 340) * 3.7, -1.6 + random(i + 810) * 1.4], [.14, .36, .68], 10 + random(i + 44) * 11, .12 + random(i + 6) * .18, 0, random(i + 71));
   }
   for (let head = 0; head < 3; head++) {
-    for (let i = 0; i < 180; i++) {
-      const seed = head * 180 + i;
-      const s: Strand = { head, end: [.69 + random(seed + 20) * .15, -1.62 + i / 179 * 3.24, -.76 + random(seed) * 1.42], seed: random(seed + 93) };
+    for (let sheet = 0; sheet < 3; sheet++) for (let row = 0; row < rowsPerSheet; row++) {
+      const seed = head * strandsPerHead + sheet * rowsPerSheet + row;
+      // Ordered layers, rather than random Z endpoints, keep adjacent fibres parallel.
+      const s: Strand = { head, end: [.72 + sheet * .045, -1.62 + row / (rowsPerSheet - 1) * 3.24, -.58 + sheet * .48 + head * .035], seed: random(seed + 93) };
       strands.push(s);
       for (let step = 0; step < 26; step++) {
-        const a = step / 26, b = (step + 1) / 26;
-        const alpha = .055 + random(seed) * .11;
-        add(lines, curve(s, a), colors[head], 1, alpha, 1, s.seed);
-        add(lines, curve(s, b), colors[head], 1, alpha, 1, s.seed);
+        const alpha = .026 + sheet * .009;
+        add(lines, curve(s, step / 26), colors[head], 1, alpha, 1, s.seed);
+        add(lines, curve(s, (step + 1) / 26), colors[head], 1, alpha, 1, s.seed);
       }
-    }
-    for (let col = 0; col < 42; col++) for (let row = 0; row < 5; row++) {
-      const seed = head * 300 + col * 5 + row;
-      add(points, [-2.9 + col * .051, headY[head] + (row - 2) * .035 + Math.sin(col * .14) * .04, -.1 + (row - 2) * .08], colors[head], 9 + random(seed) * 5, .45 + random(seed + 3) * .65, 0, random(seed));
     }
   }
   // Long horizontal wires lend perspective and connect the loom to the output wall.
@@ -334,49 +340,78 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     return { time, paused, speed, fps: Math.round(fps), phase: phases[Math.min(4, Math.floor(time % 2.25 / .45))], caseIndex,
       camera: cameras[Math.floor(time % 27 / 4.5)], decisions: 732 + Math.floor(time * 337), confidence: [.97, .94, .91, .92, .93, .90, .96, .89, .91, .71, .82, .94][caseIndex], latency: 256 + Math.round(Math.sin(time * .8) * 6) };
   }
+  let overlayItems: SignalOverlay[] = [];
+  const flowProbes: { id: string; head: number; progress: number; world: Vec3; screen: [number, number] }[] = [];
+  function updateOverlays() {
+    const items: SignalOverlay[] = [];
+    const addCard = (id: string, kind: 'source' | 'packet', head: number, world: Vec3, age: number, duration: number, title: string, detail: string) => {
+      const p = project(world);
+      const opacity = smooth(clamp(age / .14, 0, 1)) * smooth(clamp((duration - age) / .22, 0, 1));
+      if (opacity <= .01 || p[0] < 30 || p[0] > width - 30 || p[1] < 20 || p[1] > height - 20) return;
+      items.push({ id, kind, head, title, detail, x: p[0], y: p[1], scale: clamp(p[2] * .8, .55, .85), opacity });
+    };
+    for (let head = 0; head < 3; head++) {
+      const clock = time + .25 + head * .7;
+      const generation = Math.floor(clock / 3.3), age = clock % 3.3;
+      if (age < 2.9) addCard(`source-${head}-${generation}`, 'source', head, [-1.32 + age * .025, headY[head] - .23, .16], age, 2.9,
+        ['CHOICE', 'SCORE', 'NOUL'][head], ['pick one label · 2 ms', 'ordered labels · 3 ms', 'yes / no · 4 ms'][head]);
+      const packetClock = time + head * .43;
+      const batch = Math.floor(packetClock / 1.55), life = packetClock % 1.55;
+      if (life < 1.22) {
+        const row = 5 + Math.floor(random(batch * 11 + head * 73) * 22);
+        const strand = strands[head * strandsPerHead + rowsPerSheet + row];
+        const world = dataPath(strand, .06 + life / 1.22 * .76);
+        world[1] -= .10; world[2] += .16;
+        addCard(`packet-${head}-${batch}`, 'packet', head, world, life, 1.22,
+          `PKT 0x${(25111100 + batch * 37 + head * 17).toString(16).toUpperCase()}`, `${['choice', 'score', 'noul'][head]} · ${7 + head} bits · ${snapshot().confidence.toFixed(2)}`);
+      }
+    }
+    overlayItems = items;
+    options.onOverlay?.(items);
+  }
   function updatePackets() {
     packets.length = 0;
     // Large billboards provide spatial haze without blurring the interface or all geometry.
     add(packets, [-.45, 0, -1.3], [.12, .18, .44], 1000, .23, 2, 0);
     add(packets, [1.7, .1, -1.1], [.12, .16, .44], 1000, .2, 2, 0);
-    for (let i = 0; i < strands.length; i += 7) {
-      const strand = strands[i];
-      const t = (time * (.21 + strand.seed * .07) + strand.seed) % 1;
-      // A compact cluster in the middle of the ribbon punctuates the continuous fine threads.
-      const burst = Math.pow(Math.max(0, Math.sin(t * Math.PI)), 3);
-      const p = curve(strand, t);
-      add(packets, p, colors[strand.head], 6 + burst * 8, .3 + burst * .4, 1, strand.seed);
-      if (i % 6 === 0) for (let k = 1; k < 6; k++) {
-        add(packets, curve(strand, Math.max(0, t - k * .006)), colors[strand.head], 4 + burst * 4, (.5 - k * .07) * burst, 1, strand.seed);
+    flowProbes.length = 0;
+    // Bursts travel the complete route in 0.8s. Neighbouring lanes share a launch time,
+    // producing forward-moving ribbons with a sharp head and a tapered data tail.
+    for (let head = 0; head < 3; head++) for (let group = 0; group < 4; group++) {
+      const clock = time * flowRate + group / 4 + head * .11;
+      const cycle = Math.floor(clock), progress = clock % 1;
+      const row = 4 + Math.floor(random(cycle * 13 + group * 7 + head * 31) * 24);
+      const sheet = group % 3;
+      const center = strands[head * strandsPerHead + sheet * rowsPerSheet + row];
+      const world = dataPath(center, progress), projected = project(world);
+      flowProbes.push({ id: `${head}-${group}-${cycle}`, head, progress, world, screen: [projected[0], projected[1]] });
+      for (let lane = -3; lane <= 3; lane++) {
+        const strand = strands[head * strandsPerHead + sheet * rowsPerSheet + row + lane];
+        const lead = progress - Math.abs(lane) * .007;
+        if (lead < 0) continue;
+        const envelope = Math.sin(Math.PI * clamp(lead / .04, 0, 1) * .5) * clamp((1 - lead) / .06, 0, 1);
+        const pale = colors[head].map(v => .55 + v * .45) as Color;
+        add(packets, dataPath(strand, lead), pale, 23 - Math.abs(lane) * 2, envelope * 1.8, 1, strand.seed);
+        for (let tail = 1; tail <= 26; tail++) {
+          const t = lead - tail * .004;
+          if (t < 0) continue;
+          add(packets, dataPath(strand, t), colors[head], tail % 7 === 0 ? 12 : 13 - tail * .25, envelope * (1 - tail / 27) * 1.15, tail % 7 === 0 ? 0 : 1, strand.seed + tail * .13);
+        }
       }
-    }
-    // A few irregular white-hot packet groups stretch vertically along the shared fan of fibres.
-    for (let i = 0; i < strands.length; i++) {
-      const strand = strands[i];
-      const y = strand.end[1];
-      let energy = 0;
-      for (let group = 0; group < 5; group++) {
-        const center = -1.45 + group * .71 + Math.sin(time * .9 + group * 2.7) * .2;
-        const spread = .10 + random(group + 42) * .075;
-        energy = Math.max(energy, Math.exp(-(((y - center) / spread) ** 2)));
-      }
-      if (energy < .16) continue;
-      const t = .67 + .055 * Math.sin(y * 2 + time * .8) + strand.head * .024 + (strand.seed - .5) * .025;
-      const p = curve(strand, t);
-      const pale = colors[strand.head].map(v => .45 + v * .55) as Color;
-      add(packets, p, pale, 9 + energy * 9, .4 + energy * .6, 1, strand.seed);
-      if (i % 8 === 0) add(packets, p, pale, 65, energy * .24, 3, strand.seed);
-      if (i % 3 === 0) for (let k = 1; k <= 7; k++) add(packets, curve(strand, t - k * .006), pale, 8 + energy * 6, (.7 - k * .08) * energy, 1, strand.seed);
+      if (progress > .04 && progress < .96) add(packets, world, colors[head], 90, .34, 2, 0);
     }
     for (let head = 0; head < 3; head++) {
       const p: Vec3 = [sourceX, headY[head], 0];
-      const pulse = .8 + Math.sin(time * 7 + head) * .2;
+      const pulse = .92 + Math.sin(time * 7 + head) * .08;
       add(packets, p, colors[head], (head === 0 ? 580 : 260) * pulse, head === 0 ? .62 : .16, 2, 0);
-      add(packets, p, colors[head], (head === 0 ? 140 : 95) * pulse, head === 0 ? .65 : .4, 2, 0);
-      add(packets, p, colors[head], (head === 0 ? 48 : 35) * pulse, head === 0 ? 1.4 : 1, 1, 0);
-      for (let i = 0; i < 14; i++) {
-        const phase = (time * .6 + i / 14) % 1;
-        add(packets, [-2.8 + phase * (2.8 + sourceX), headY[head] + Math.sin(phase * 9 + head) * .02, 0], colors[head], 5, phase * .75, 1, 0);
+      add(packets, p, colors[head], (head === 0 ? 125 : 95) * pulse, head === 0 ? .65 : .4, 2, 0);
+      add(packets, p, colors[head], (head === 0 ? 34 : 30) * pulse, head === 0 ? 1.4 : 1, 1, 0);
+      // The input digits themselves translate toward the source at 2.1 traversals/second.
+      for (let col = 0; col < 42; col++) for (let row = 0; row < 5; row++) {
+        const phase = (col / 42 + time * 2.1) % 1;
+        const world: Vec3 = [-2.9 + phase * (2.9 + sourceX), headY[head] + (row - 2) * .035 + Math.sin(phase * 6) * .025, (row - 2) * .06];
+        const edge = Math.min(1, phase * 12, (1 - phase) * 18);
+        add(packets, world, colors[head], 10, edge * (.45 + random(col + head * 42) * .6), 0, random(col * 5 + row));
       }
     }
   }
@@ -434,9 +469,9 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     ctx.fillStyle = '#050711'; ctx.fillRect(0, 0, width, height); ctx.globalCompositeOperation = 'lighter';
     for (let head = 0; head < 3; head++) {
-      ctx.strokeStyle = `rgba(${colors[head].map(c => Math.round(c * 255)).join(',')},.12)`; ctx.lineWidth = .5;
+      ctx.strokeStyle = `rgba(${colors[head].map(c => Math.round(c * 255)).join(',')},.065)`; ctx.lineWidth = .5;
       ctx.beginPath();
-      for (let i = head * 180; i < (head + 1) * 180; i += 3) for (let k = 0; k <= 18; k++) {
+      for (let i = head * strandsPerHead; i < (head + 1) * strandsPerHead; i += 2) for (let k = 0; k <= 18; k++) {
         const p = project(curve(strands[i], k / 18)); if (k === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
       }
       ctx.stroke();
@@ -452,11 +487,15 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
       const p = project([packets[i], packets[i + 1], packets[i + 2]]);
       const size = packets[i + 6] * p[2];
       const head = packets[i + 3] > .9 ? packets[i + 5] > packets[i + 4] ? 1 : 2 : 0;
-      ctx.globalAlpha = packets[i + 7]; ctx.drawImage(glowSprites[head], p[0] - size / 2, p[1] - size / 2, size, size);
+      ctx.globalAlpha = packets[i + 7];
+      if (packets[i + 8] === 0) {
+        const digit = Math.floor((packets[i + 9] % 1) * 2);
+        ctx.drawImage(atlas, digit * 32, 0, 32, 32, p[0] - size / 2, p[1] - size / 2, size, size);
+      } else ctx.drawImage(glowSprites[head], p[0] - size / 2, p[1] - size / 2, size, size);
     }
     ctx.globalAlpha = 1;
   }
-  function render() { camera(); updatePackets(); if (gpuReady) drawGpu(); else drawFallback(); }
+  function render() { camera(); updatePackets(); updateOverlays(); if (gpuReady) drawGpu(); else drawFallback(); }
   function notify() { options.onUpdate(snapshot()); }
   function resize() {
     const rect = canvas.getBoundingClientRect(); width = Math.max(1, rect.width); height = Math.max(1, rect.height);
@@ -524,7 +563,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     getSnapshot: snapshot,
     debug() {
       const probes: Vec3[] = [[1.2, -.8, -.95], [1.2, -.8, .61], [sourceX, 1.03, 0]];
-      return { pointCount: points.length / 10, depthRange: { ...depthRange }, rotation: { yaw, pitch, zoom }, disposed, renderer: gpuReady ? 'webgl' : 'canvas2d', frameCount, activeFrame: raf !== 0,
+      return { pointCount: points.length / 10, strandCount: strands.length, flow: flowProbes.map(p => ({ ...p, world: [...p.world] as Vec3, screen: [...p.screen] as [number, number] })), overlays: overlayItems.map(item => ({ ...item })), depthRange: { ...depthRange }, rotation: { yaw, pitch, zoom }, disposed, renderer: gpuReady ? 'webgl' : 'canvas2d', frameCount, activeFrame: raf !== 0,
         probes: probes.map(world => { const p = project(world); return { world, screen: [p[0], p[1]] }; }) };
     },
     dispose() {
