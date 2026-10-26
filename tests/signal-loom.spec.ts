@@ -59,10 +59,13 @@ test('Signal Loom rapidly transports the same data packets continuously into the
     controller.setPaused(true);
     return { initial, after100ms, path };
   });
-  expect(result.initial).toHaveLength(3);
+  expect(result.initial.length).toBeGreaterThan(3);
   for (const head of [0, 1, 2]) {
-    expect(result.initial.filter(packet => packet.head === head)).toHaveLength(1);
-    expect(result.after100ms.filter(packet => packet.head === head)).toHaveLength(1);
+    const channel = result.initial.filter(packet => packet.head === head);
+    expect(channel.length).toBeGreaterThan(1);
+    expect(new Set(channel.map(packet => JSON.stringify(packet.origin))).size).toBe(1);
+    expect(new Set(channel.map(packet => packet.progress.toFixed(3))).size).toBe(channel.length);
+    expect(channel[0]!.origin[0]).toBeLessThan(-1);
     const first = result.initial.find(packet => packet.head === head && packet.progress < .5)!;
     const next = result.after100ms.find(packet => packet.id === first.id)!;
     expect(next, `Channel ${head} retains packet identity while travelling`).toBeDefined();

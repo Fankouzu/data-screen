@@ -26,7 +26,7 @@ export interface SignalOverlay {
 export interface SignalDiagnostics {
   pointCount: number;
   strandCount: number;
-  flow: { id: string; head: number; progress: number; world: [number, number, number]; screen: [number, number] }[];
+  flow: { id: string; head: number; progress: number; origin: [number, number, number]; world: [number, number, number]; screen: [number, number] }[];
   overlays: SignalOverlay[];
   depthRange: { min: number; max: number };
   rotation: { yaw: number; pitch: number; zoom: number };

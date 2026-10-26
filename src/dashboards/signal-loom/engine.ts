@@ -9,18 +9,20 @@ const cameras = ['THREE-QUARTER', 'FRONT', 'GLASS FLOW', 'BEHIND THE FAN', 'CRAN
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const random = (n: number) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
 const smooth = (n: number) => n * n * (3 - 2 * n);
-const headY = [-1.03, .03, 1.03];
-const sourceX = -.78;
+const headY = [-.82, .03, .85];
+const sourceX = -1.16;
 const rowsPerSheet = 32;
 const strandsPerHead = rowsPerSheet * 3;
 const flowRate = 1.25;
+const fanEnd = .62;
+const packetsPerSource = 12;
 
 function curve(strand: Strand, t: number): Vec3 {
   const a = 1 - t;
   const y = headY[strand.head];
   const [ex, ey, ez] = strand.end;
   return [
-    a * a * a * sourceX + 3 * a * a * t * -.50 + 3 * a * t * t * -.30 + t * t * t * ex,
+    a * a * a * sourceX + 3 * a * a * t * (sourceX + .90) + 3 * a * t * t * (ex - .55) + t * t * t * ex,
     a * a * a * y + 3 * a * a * t * y + 3 * a * t * t * ey + t * t * t * ey,
     3 * a * t * t * ez + t * t * t * ez,
   ];
@@ -28,8 +30,8 @@ function curve(strand: Strand, t: number): Vec3 {
 
 // One route continues from the source, through the loom gate, into the output matrix.
 function dataPath(strand: Strand, progress: number): Vec3 {
-  if (progress <= .48) return curve(strand, progress / .48);
-  const t = (progress - .48) / .52;
+  if (progress <= fanEnd) return curve(strand, progress / fanEnd);
+  const t = (progress - fanEnd) / (1 - fanEnd);
   return [strand.end[0] + t * (3.5 - strand.end[0]), strand.end[1], strand.end[2]];
 }
 
@@ -60,8 +62,12 @@ void main() {
   gl_Position=vec4(screen.x/u_resolution.x*2.-1.,1.-screen.y/u_resolution.y*2.,0.,1.);
   gl_PointSize=clamp(a_style.x*scale/155.*perspective*u_dpr,1.,512.);
   if(u_quad>.5) {
-    vec2 shape=a_style.z>2.5?vec2(.42,1.55):vec2(1.);
-    gl_Position.xy+=a_corner*shape*vec2(1.,-1.)*a_style.x*scale/155.*perspective/u_resolution;
+    vec2 offset=a_corner;
+    if(a_style.z>3.5) {
+      vec2 along=vec2(cos(a_style.w),sin(a_style.w));
+      offset=along*a_corner.x*1.8+vec2(-along.y,along.x)*a_corner.y*.55;
+    } else if(a_style.z>2.5) offset*=vec2(.42,1.55);
+    gl_Position.xy+=offset*vec2(1.,-1.)*a_style.x*scale/155.*perspective/u_resolution;
   }
   v_uv=a_corner*.5+.5;
   v_blur=clamp((.3-p.z)*.025,0.,.045);
@@ -170,21 +176,21 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
         const seed = layer * 4400 + col * 47 + row;
         const n = random(seed);
         if (n < .12) continue;
-        const x = .86 + col * .049 + layer * .04 + Math.sin(row * .18 + layer) * .11 + random(seed + 72) * .024;
+        const x = .96 + col * .049 + layer * .04 + Math.sin(row * .18 + layer) * .11 + random(seed + 72) * .024;
         const y = -1.75 + row * .081 + random(col + layer * 53) * .04 + random(seed + 9) * .018;
         const z = -.95 + layer * .48 + Math.sin(col * .15) * .12;
-        const c: Color = n > .984 ? colors[1] : n > .975 ? colors[2] : n > .69 ? [.52, .94, 1] : [.19, .38, .9];
+        const c: Color = n > .955 ? colors[1] : n > .93 ? colors[2] : n > .84 ? [.4, .75, 1] : [.28, .39, .95];
         const hotspot = Math.pow(.5 + .5 * Math.sin(col * .26 + row * .15 + layer), 4);
-        add(points, [x, y, z], c, (n > .75 ? 16 : 10) + random(seed + 83) * 5, (.12 + n * .52 + hotspot * .7) * (layer === 3 ? 1 : .62), n > .99 ? 1 : 0, n);
-        if (layer === 3 && n > .93) add(points, [x, y, z], [.3, .86, 1], 40, .1 + hotspot * .12, 2, n);
+        add(points, [x, y, z], c, (n > .75 ? 12 : 8) + random(seed + 83) * 3, (.26 + n * .62 + hotspot * .48) * (layer === 3 ? 1 : .78), n > .99 ? 1 : 0, n);
+        if (layer === 3 && n > .93) add(points, [x, y, z], [.3, .86, 1], 38, .09 + hotspot * .12, 2, n);
       }
     }
   }
   // The thin loom gate separates individual strands before they enter the wider binary field.
   for (let row = 0; row < 42; row++) for (let col = 0; col < 5; col++) {
     const seed = row * 5 + col;
-    const c: Color = seed % 11 === 0 ? colors[1] : seed % 13 === 0 ? colors[2] : [.3, .95, 1];
-    add(points, [.61 + col * .07, -1.65 + row * .08, .18 + Math.sin(row * .11) * .2], c, 14, .7 + random(seed) * .55, 1, random(seed));
+    const c: Color = seed % 5 === 0 ? colors[1] : seed % 7 === 0 ? colors[2] : seed % 3 === 0 ? [.4, .45, 1] : [.3, .95, 1];
+    add(points, [.43 + col * .07, -1.65 + row * .08, .18 + Math.sin(row * .11) * .2], c, 12, .60 + random(seed) * .65, 1, random(seed));
   }
   // Sparse out-of-focus binary rain lives behind the signal inputs, not on a screen-space overlay.
   for (let i = 0; i < 750; i++) {
@@ -194,12 +200,13 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     for (let sheet = 0; sheet < 3; sheet++) for (let row = 0; row < rowsPerSheet; row++) {
       const seed = head * strandsPerHead + sheet * rowsPerSheet + row;
       // Ordered layers, rather than random Z endpoints, keep adjacent fibres parallel.
-      const s: Strand = { head, end: [.72 + sheet * .045, -1.62 + row / (rowsPerSheet - 1) * 3.24, -.58 + sheet * .48 + head * .035], seed: random(seed + 93) };
+      const s: Strand = { head, end: [.50 + sheet * .045, -1.62 + row / (rowsPerSheet - 1) * 3.24, -.58 + sheet * .48 + head * .035], seed: random(seed + 93) };
       strands.push(s);
-      for (let step = 0; step < 26; step++) {
-        const alpha = row % 4 === 0 ? .17 + sheet * .025 : .05 + sheet * .008;
-        add(lines, curve(s, step / 26), colors[head], 1, alpha, 1, s.seed);
-        add(lines, curve(s, (step + 1) / 26), colors[head], 1, alpha, 1, s.seed);
+      for (let step = 0; step < 40; step++) {
+        const alpha = .10 + sheet * .022;
+        const fibreColor = colors[head].map(v => .2 + v * .8) as Color;
+        add(lines, curve(s, step / 40), fibreColor, 1, alpha, 1, s.seed);
+        add(lines, curve(s, (step + 1) / 40), fibreColor, 1, alpha, 1, s.seed);
       }
     }
   }
@@ -341,7 +348,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
       camera: cameras[Math.floor(time % 27 / 4.5)], decisions: 732 + Math.floor(time * 337), confidence: [.97, .94, .91, .92, .93, .90, .96, .89, .91, .71, .82, .94][caseIndex], latency: 256 + Math.round(Math.sin(time * .8) * 6) };
   }
   let overlayItems: SignalOverlay[] = [];
-  const flowProbes: { id: string; head: number; progress: number; world: Vec3; screen: [number, number] }[] = [];
+  const flowProbes: { id: string; head: number; progress: number; origin: Vec3; world: Vec3; screen: [number, number] }[] = [];
   function updateOverlays() {
     const items: SignalOverlay[] = [];
     const addCard = (id: string, kind: 'source' | 'packet', head: number, world: Vec3, age: number, duration: number, title: string, detail: string) => {
@@ -375,25 +382,52 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     add(packets, [-.45, 0, -1.3], [.12, .18, .44], 1000, .23, 2, 0);
     add(packets, [1.7, .1, -1.1], [.12, .16, .44], 1000, .2, 2, 0);
     flowProbes.length = 0;
-    // Each source emits one packet at a time along one fibre. The next packet
-    // chooses a new destination only after the preceding one completes its 0.8s route.
-    for (let head = 0; head < 3; head++) {
-      const clock = time * flowRate + head * .11;
+    // One origin per channel, with asynchronous departures along different fibres.
+    // A packet is a single tangent-aligned spindle, never a row of parallel bright heads.
+    for (let head = 0; head < 3; head++) for (let slot = 0; slot < packetsPerSource; slot++) {
+      const rate = flowRate * (slot === 0 ? 1 : .9 + random(slot + head * 23) * .18);
+      const phase = slot === 0 ? 0 : slot / packetsPerSource + random(slot + head * 29) * .035;
+      const clock = time * rate + phase + head * .11;
       const cycle = Math.floor(clock), progress = clock % 1;
-      const row = 4 + Math.floor(random(cycle * 13 + head * 31) * 24);
-      const sheet = cycle % 3;
+      const row = 1 + Math.floor(random(cycle * 13 + slot * 17 + head * 31) * 30);
+      const sheet = (cycle + slot) % 3;
       const strand = strands[head * strandsPerHead + sheet * rowsPerSheet + row];
       const world = dataPath(strand, progress), projected = project(world);
-      flowProbes.push({ id: `${head}-${cycle}`, head, progress, world, screen: [projected[0], projected[1]] });
-      const envelope = smooth(clamp(progress / .025, 0, 1)) * clamp((1 - progress) / .04, 0, 1);
-      const pale = colors[head].map(v => .55 + v * .45) as Color;
-      add(packets, world, pale, 18, envelope * 1.7, 1, strand.seed);
-      for (let tail = 1; tail <= 26; tail++) {
-        const t = progress - tail * .004;
+      flowProbes.push({ id: `${head}-${slot}-${cycle}`, head, progress, origin: curve(strand, 0), world, screen: [projected[0], projected[1]] });
+      const wallFade = 1 - .82 * smooth(clamp((progress - fanEnd) / .10, 0, 1));
+      const envelope = smooth(clamp(progress / .025, 0, 1)) * clamp((1 - progress) / .04, 0, 1) * wallFade;
+      const pale = colors[head].map(v => .65 + v * .35) as Color;
+      const ahead = project(dataPath(strand, Math.min(1, progress + .006)));
+      const angle = Math.atan2(ahead[1] - projected[1], ahead[0] - projected[0]);
+      const energy = .8 + random(slot + cycle * 37) * .4;
+      add(packets, world, pale, 28 + energy * 7, envelope * .75, 4, angle);
+      add(packets, world, pale, 20, envelope * 1.5, 1, strand.seed);
+      for (let tail = 1; tail <= 30; tail++) {
+        const t = progress - tail * (progress > fanEnd ? .0012 : .0035);
         if (t < 0) continue;
-        add(packets, dataPath(strand, t), colors[head], 9 - tail * .18, envelope * (1 - tail / 27) * .85, 1, strand.seed);
+        add(packets, dataPath(strand, t), colors[head], 16 - tail * .38, envelope * (1 - tail / 31) * (.45 + random(tail * 7 + slot * 31) * .4), 1, strand.seed);
       }
-      if (progress > .025 && progress < .96) add(packets, world, colors[head], 28, .16 * envelope, 2, 0);
+      // Fine fragments follow the curved wake; they never form extra source heads.
+      if (progress < fanEnd) for (let fleck = 0; fleck < 14; fleck++) {
+        const t = progress - .012 - fleck * .005;
+        if (t < 0) continue;
+        const seed = cycle * 79 + slot * 37 + fleck;
+        const wake = dataPath(strand, t);
+        wake[1] += (random(seed) - .5) * .035;
+        wake[2] += (random(seed + 9) - .5) * .045;
+        add(packets, wake, pale, 3 + random(seed + 3) * 4, envelope * (1 - fleck / 15) * .9, 1, strand.seed);
+      }
+      if (progress > .025 && progress < .96) add(packets, world, colors[head], 70, .16 * envelope, 2, 0);
+      // A short-lived activation follows each arrival, rather than lighting the whole gate.
+      if (progress >= fanEnd && progress < fanEnd + .18) {
+        const impact = (1 - (progress - fanEnd) / .18) ** 3;
+        const gateRow = Math.round((strand.end[1] + 1.65) / .08);
+        for (let rowOffset = -1; rowOffset <= 1; rowOffset++) for (let col = 1; col < 4; col++) {
+          const row = gateRow + rowOffset;
+          add(packets, [.43 + col * .07, -1.65 + row * .08, .18 + Math.sin(row * .11) * .2], pale, 18, impact * 1.2, 1, 0);
+        }
+        add(packets, [.57, strand.end[1], strand.end[2]], colors[head], 60, impact * .25, 2, 0);
+      }
     }
     for (let head = 0; head < 3; head++) {
       const p: Vec3 = [sourceX, headY[head], 0];
@@ -402,11 +436,14 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
       add(packets, p, colors[head], 36 * pulse, .38, 2, 0);
       add(packets, p, colors[head], 12 * pulse, 1, 1, 0);
       // The input digits themselves translate toward the source at 2.1 traversals/second.
-      for (let col = 0; col < 42; col++) for (let row = 0; row < 5; row++) {
-        const phase = (col / 42 + time * 2.1) % 1;
-        const world: Vec3 = [-2.9 + phase * (2.9 + sourceX), headY[head] + (row - 2) * .035 + Math.sin(phase * 6) * .025, (row - 2) * .06];
+      for (let col = 0; col < 30; col++) for (let row = 0; row < 3; row++) {
+        const seed = col * 7 + row + head * 101;
+        if (random(seed) < .15) continue;
+        const phase = (col / 30 + time * 2.1) % 1;
+        const width = 1 - phase;
+        const world: Vec3 = [-2.9 + phase * (2.9 + sourceX), headY[head] + ((row - 1) * .07 + (random(seed + 77) - .5) * .08) * width, ((row - 1) * .10 + random(seed + 20) * .08) * width];
         const edge = Math.min(1, phase * 12, (1 - phase) * 18);
-        add(packets, world, colors[head], 10, edge * (.45 + random(col + head * 42) * .6), 0, random(col * 5 + row));
+        add(packets, world, colors[head], 8 + random(seed + 19) * 8, edge * (.35 + random(seed) * .7), 0, random(seed));
       }
     }
   }
@@ -486,6 +523,9 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
       if (packets[i + 8] === 0) {
         const digit = Math.floor((packets[i + 9] % 1) * 2);
         ctx.drawImage(atlas, digit * 32, 0, 32, 32, p[0] - size / 2, p[1] - size / 2, size, size);
+      } else if (packets[i + 8] === 4) {
+        ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(packets[i + 9]); ctx.scale(1.8, .55);
+        ctx.drawImage(glowSprites[head], -size / 2, -size / 2, size, size); ctx.restore();
       } else ctx.drawImage(glowSprites[head], p[0] - size / 2, p[1] - size / 2, size, size);
     }
     ctx.globalAlpha = 1;
@@ -558,7 +598,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     getSnapshot: snapshot,
     debug() {
       const probes: Vec3[] = [[1.2, -.8, -.95], [1.2, -.8, .61], [sourceX, 1.03, 0]];
-      return { pointCount: points.length / 10, strandCount: strands.length, flow: flowProbes.map(p => ({ ...p, world: [...p.world] as Vec3, screen: [...p.screen] as [number, number] })), overlays: overlayItems.map(item => ({ ...item })), depthRange: { ...depthRange }, rotation: { yaw, pitch, zoom }, disposed, renderer: gpuReady ? 'webgl' : 'canvas2d', frameCount, activeFrame: raf !== 0,
+      return { pointCount: points.length / 10, strandCount: strands.length, flow: flowProbes.map(p => ({ ...p, origin: [...p.origin] as Vec3, world: [...p.world] as Vec3, screen: [...p.screen] as [number, number] })), overlays: overlayItems.map(item => ({ ...item })), depthRange: { ...depthRange }, rotation: { yaw, pitch, zoom }, disposed, renderer: gpuReady ? 'webgl' : 'canvas2d', frameCount, activeFrame: raf !== 0,
         probes: probes.map(world => { const p = project(world); return { world, screen: [p[0], p[1]] }; }) };
     },
     dispose() {
