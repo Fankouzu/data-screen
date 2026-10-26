@@ -107,6 +107,8 @@ test('Signal Loom visits twelve cases, all phases and six camera poses at low fr
 });
 
 test('Signal Loom cleans animation frames on repeated SPA exits', async ({ page }) => {
+  // Three real GPU context initializations need more time on software-rendered CI.
+  test.setTimeout(60_000);
   await page.addInitScript(() => {
     const request = window.requestAnimationFrame.bind(window);
     const cancel = window.cancelAnimationFrame.bind(window);
