@@ -125,7 +125,8 @@ test('Signal Loom cleans animation frames on repeated SPA exits', async ({ page 
   });
   await page.goto('/#/');
   for (let visit = 0; visit < 3; visit++) {
-    await page.locator('.open-screen[href="#/screens/signal-loom"]').click();
+    // Keyboard activation exercises the same RouterLink without compositor-stability waits.
+    await page.locator('.open-screen[href="#/screens/signal-loom"]').press('Enter');
     // The application's RAF is controlled here, so readiness must use timer polling.
     await page.waitForFunction(() => !!window.signalLoom, undefined, { polling: 50 });
     await expect.poll(() => page.evaluate(() => window.__loomFrames!.size)).toBe(1);
@@ -136,7 +137,7 @@ test('Signal Loom cleans animation frames on repeated SPA exits', async ({ page 
     });
     expect(rendered).toBe(1);
     expect(await page.evaluate(() => window.__loomFrames!.size)).toBe(1);
-    await page.getByRole('link', { name: '返回大屏索引' }).click();
+    await page.getByRole('link', { name: '返回大屏索引' }).press('Enter');
     await expect(page.locator('.open-screen')).toHaveCount(5);
     await expect.poll(() => page.evaluate(() => ({ controller: typeof window.signalLoom, frames: window.__loomFrames!.size }))).toEqual({ controller: 'undefined', frames: 0 });
   }
