@@ -197,7 +197,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
       const s: Strand = { head, end: [.72 + sheet * .045, -1.62 + row / (rowsPerSheet - 1) * 3.24, -.58 + sheet * .48 + head * .035], seed: random(seed + 93) };
       strands.push(s);
       for (let step = 0; step < 26; step++) {
-        const alpha = .026 + sheet * .009;
+        const alpha = row % 4 === 0 ? .17 + sheet * .025 : .05 + sheet * .008;
         add(lines, curve(s, step / 26), colors[head], 1, alpha, 1, s.seed);
         add(lines, curve(s, (step + 1) / 26), colors[head], 1, alpha, 1, s.seed);
       }
@@ -375,37 +375,32 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     add(packets, [-.45, 0, -1.3], [.12, .18, .44], 1000, .23, 2, 0);
     add(packets, [1.7, .1, -1.1], [.12, .16, .44], 1000, .2, 2, 0);
     flowProbes.length = 0;
-    // Bursts travel the complete route in 0.8s. Neighbouring lanes share a launch time,
-    // producing forward-moving ribbons with a sharp head and a tapered data tail.
-    for (let head = 0; head < 3; head++) for (let group = 0; group < 4; group++) {
-      const clock = time * flowRate + group / 4 + head * .11;
+    // Each source emits one packet at a time along one fibre. The next packet
+    // chooses a new destination only after the preceding one completes its 0.8s route.
+    for (let head = 0; head < 3; head++) {
+      const clock = time * flowRate + head * .11;
       const cycle = Math.floor(clock), progress = clock % 1;
-      const row = 4 + Math.floor(random(cycle * 13 + group * 7 + head * 31) * 24);
-      const sheet = group % 3;
-      const center = strands[head * strandsPerHead + sheet * rowsPerSheet + row];
-      const world = dataPath(center, progress), projected = project(world);
-      flowProbes.push({ id: `${head}-${group}-${cycle}`, head, progress, world, screen: [projected[0], projected[1]] });
-      for (let lane = -3; lane <= 3; lane++) {
-        const strand = strands[head * strandsPerHead + sheet * rowsPerSheet + row + lane];
-        const lead = progress - Math.abs(lane) * .007;
-        if (lead < 0) continue;
-        const envelope = Math.sin(Math.PI * clamp(lead / .04, 0, 1) * .5) * clamp((1 - lead) / .06, 0, 1);
-        const pale = colors[head].map(v => .55 + v * .45) as Color;
-        add(packets, dataPath(strand, lead), pale, 23 - Math.abs(lane) * 2, envelope * 1.8, 1, strand.seed);
-        for (let tail = 1; tail <= 26; tail++) {
-          const t = lead - tail * .004;
-          if (t < 0) continue;
-          add(packets, dataPath(strand, t), colors[head], tail % 7 === 0 ? 12 : 13 - tail * .25, envelope * (1 - tail / 27) * 1.15, tail % 7 === 0 ? 0 : 1, strand.seed + tail * .13);
-        }
+      const row = 4 + Math.floor(random(cycle * 13 + head * 31) * 24);
+      const sheet = cycle % 3;
+      const strand = strands[head * strandsPerHead + sheet * rowsPerSheet + row];
+      const world = dataPath(strand, progress), projected = project(world);
+      flowProbes.push({ id: `${head}-${cycle}`, head, progress, world, screen: [projected[0], projected[1]] });
+      const envelope = smooth(clamp(progress / .025, 0, 1)) * clamp((1 - progress) / .04, 0, 1);
+      const pale = colors[head].map(v => .55 + v * .45) as Color;
+      add(packets, world, pale, 18, envelope * 1.7, 1, strand.seed);
+      for (let tail = 1; tail <= 26; tail++) {
+        const t = progress - tail * .004;
+        if (t < 0) continue;
+        add(packets, dataPath(strand, t), colors[head], 9 - tail * .18, envelope * (1 - tail / 27) * .85, 1, strand.seed);
       }
-      if (progress > .04 && progress < .96) add(packets, world, colors[head], 90, .34, 2, 0);
+      if (progress > .025 && progress < .96) add(packets, world, colors[head], 28, .16 * envelope, 2, 0);
     }
     for (let head = 0; head < 3; head++) {
       const p: Vec3 = [sourceX, headY[head], 0];
       const pulse = .92 + Math.sin(time * 7 + head) * .08;
-      add(packets, p, colors[head], (head === 0 ? 580 : 260) * pulse, head === 0 ? .62 : .16, 2, 0);
-      add(packets, p, colors[head], (head === 0 ? 125 : 95) * pulse, head === 0 ? .65 : .4, 2, 0);
-      add(packets, p, colors[head], (head === 0 ? 34 : 30) * pulse, head === 0 ? 1.4 : 1, 1, 0);
+      add(packets, p, colors[head], 100 * pulse, .18, 2, 0);
+      add(packets, p, colors[head], 36 * pulse, .38, 2, 0);
+      add(packets, p, colors[head], 12 * pulse, 1, 1, 0);
       // The input digits themselves translate toward the source at 2.1 traversals/second.
       for (let col = 0; col < 42; col++) for (let row = 0; row < 5; row++) {
         const phase = (col / 42 + time * 2.1) % 1;
@@ -469,7 +464,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     ctx.fillStyle = '#050711'; ctx.fillRect(0, 0, width, height); ctx.globalCompositeOperation = 'lighter';
     for (let head = 0; head < 3; head++) {
-      ctx.strokeStyle = `rgba(${colors[head].map(c => Math.round(c * 255)).join(',')},.065)`; ctx.lineWidth = .5;
+      ctx.strokeStyle = `rgba(${colors[head].map(c => Math.round(c * 255)).join(',')},.13)`; ctx.lineWidth = .7;
       ctx.beginPath();
       for (let i = head * strandsPerHead; i < (head + 1) * strandsPerHead; i += 2) for (let k = 0; k <= 18; k++) {
         const p = project(curve(strands[i], k / 18)); if (k === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
