@@ -18,7 +18,7 @@ const test = base.extend({
 });
 async function open(page: Page) {
   await page.goto('/#/screens/signal-loom');
-  await page.waitForFunction(() => !!window.signalLoom);
+  await page.waitForFunction(() => !!window.signalLoom, undefined, { polling: 50 });
   await expect(page.getByRole('heading', { name: /SIGNAL LOOM/ })).toBeVisible();
 }
 const state = (page: Page) => page.evaluate(() => window.signalLoom!.getSnapshot());
@@ -107,23 +107,35 @@ test('Signal Loom visits twelve cases, all phases and six camera poses at low fr
 });
 
 test('Signal Loom cleans animation frames on repeated SPA exits', async ({ page }) => {
-  // Three real GPU context initializations need more time on software-rendered CI.
-  test.setTimeout(60_000);
   await page.addInitScript(() => {
-    const request = window.requestAnimationFrame.bind(window);
-    const cancel = window.cancelAnimationFrame.bind(window);
+    // Check real renders and cancellation without a continuous software-GPU workload.
+    let next = 0;
+    const callbacks = new Map<number, FrameRequestCallback>();
     const active = new Set<number>(); window.__loomFrames = active;
     window.requestAnimationFrame = cb => {
-      const id = request(t => { active.delete(id); cb(t); });
+      const id = ++next; callbacks.set(id, cb);
       active.add(id); return id;
     };
-    window.cancelAnimationFrame = id => { active.delete(id); cancel(id); };
+    window.cancelAnimationFrame = id => { active.delete(id); callbacks.delete(id); };
+    window.__stepLoom = time => {
+      const pending = [...callbacks.entries()];
+      callbacks.clear();
+      pending.forEach(([id, cb]) => { active.delete(id); cb(time); });
+    };
   });
   await page.goto('/#/');
   for (let visit = 0; visit < 3; visit++) {
     await page.locator('.open-screen[href="#/screens/signal-loom"]').click();
-    await page.waitForFunction(() => !!window.signalLoom);
+    // The application's RAF is controlled here, so readiness must use timer polling.
+    await page.waitForFunction(() => !!window.signalLoom, undefined, { polling: 50 });
     await expect.poll(() => page.evaluate(() => window.__loomFrames!.size)).toBe(1);
+    const rendered = await page.evaluate(() => {
+      const before = window.signalLoom!.debug().frameCount;
+      window.__stepLoom!(performance.now() + 100);
+      return window.signalLoom!.debug().frameCount - before;
+    });
+    expect(rendered).toBe(1);
+    expect(await page.evaluate(() => window.__loomFrames!.size)).toBe(1);
     await page.getByRole('link', { name: '返回大屏索引' }).click();
     await expect(page.locator('.open-screen')).toHaveCount(5);
     await expect.poll(() => page.evaluate(() => ({ controller: typeof window.signalLoom, frames: window.__loomFrames!.size }))).toEqual({ controller: 'undefined', frames: 0 });
