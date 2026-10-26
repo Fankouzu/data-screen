@@ -4,6 +4,7 @@ type Vec3 = [number, number, number];
 type Color = [number, number, number];
 interface Strand { head: number; end: Vec3; seed: number }
 const colors: Color[] = [[.25, 1, 1], [1, .15, .6], [1, .85, .3]];
+const sourceTints = colors.map(color => color.map(v => .35 + v * .65) as Color);
 const phases = ['STATE', 'ASK', 'JEV', 'GATE', 'CODE'];
 const cameras = ['THREE-QUARTER', 'FRONT', 'GLASS FLOW', 'BEHIND THE FAN', 'CRANE', 'MATRIX'];
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -63,14 +64,15 @@ void main() {
   gl_PointSize=clamp(a_style.x*scale/155.*perspective*u_dpr,1.,512.);
   if(u_quad>.5) {
     vec2 offset=a_corner;
-    if(a_style.z>3.5) {
+    if(a_style.z>3.5 && a_style.z<4.5) {
       vec2 along=vec2(cos(a_style.w),sin(a_style.w));
       offset=along*a_corner.x*1.8+vec2(-along.y,along.x)*a_corner.y*.55;
-    } else if(a_style.z>2.5) offset*=vec2(.42,1.55);
+    } else if(a_style.z>2.5 && a_style.z<3.5) offset*=vec2(.42,1.55);
     gl_Position.xy+=offset*vec2(1.,-1.)*a_style.x*scale/155.*perspective/u_resolution;
   }
   v_uv=a_corner*.5+.5;
   v_blur=clamp((.3-p.z)*.025,0.,.045);
+  if(a_position.x<.65) v_blur*=.45;
   v_color=a_color;
   float scan=.78+.22*sin(a_position.y*8.-u_time*2.1+a_style.w*12.);
   v_alpha=a_style.y*scan*clamp(.85+p.z*.13,.3,1.2);
@@ -103,7 +105,7 @@ void main() {
     gl_FragColor=vec4(v_color,(ink+.085*exp(-r*3.))*v_alpha);
   } else {
     float halo=exp(-r*(v_kind>1.5?4.:8.));
-    float core=exp(-r*80.);
+    float core=v_kind>4.5?0.:exp(-r*80.);
     gl_FragColor=vec4(mix(v_color,vec3(1.),core*.8),(halo+core*.7)*v_alpha);
   }
 }`;
@@ -192,9 +194,10 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     const c: Color = seed % 5 === 0 ? colors[1] : seed % 7 === 0 ? colors[2] : seed % 3 === 0 ? [.4, .45, 1] : [.3, .95, 1];
     add(points, [.43 + col * .07, -1.65 + row * .08, .18 + Math.sin(row * .11) * .2], c, 12, .60 + random(seed) * .65, 1, random(seed));
   }
-  // Sparse out-of-focus binary rain lives behind the signal inputs, not on a screen-space overlay.
+  // Legible blue-violet binary rain retains depth behind the signal inputs.
   for (let i = 0; i < 750; i++) {
-    add(points, [-2.65 + random(i) * 3.3, -1.85 + random(i + 340) * 3.7, -1.6 + random(i + 810) * 1.4], [.14, .36, .68], 10 + random(i + 44) * 11, .12 + random(i + 6) * .18, 0, random(i + 71));
+    const tint: Color = i % 13 === 0 ? [.65, .32, .65] : [.32, .46, .95];
+    add(points, [-2.65 + random(i) * 3.3, -1.85 + random(i + 340) * 3.7, -1.6 + random(i + 810) * 1.4], tint, 12 + random(i + 44) * 11, .28 + random(i + 6) * .32, 0, random(i + 71));
   }
   for (let head = 0; head < 3; head++) {
     for (let sheet = 0; sheet < 3; sheet++) for (let row = 0; row < rowsPerSheet; row++) {
@@ -203,8 +206,8 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
       const s: Strand = { head, end: [.50 + sheet * .045, -1.62 + row / (rowsPerSheet - 1) * 3.24, -.58 + sheet * .48 + head * .035], seed: random(seed + 93) };
       strands.push(s);
       for (let step = 0; step < 40; step++) {
-        const alpha = .10 + sheet * .022;
-        const fibreColor = colors[head].map(v => .2 + v * .8) as Color;
+        const alpha = .17 + sheet * .028;
+        const fibreColor = sourceTints[head];
         add(lines, curve(s, step / 40), fibreColor, 1, alpha, 1, s.seed);
         add(lines, curve(s, (step + 1) / 40), fibreColor, 1, alpha, 1, s.seed);
       }
@@ -317,12 +320,12 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     }
   }
   if (!gl) enableFallback();
-  const glowSprites = colors.map(color => {
+  const glowSprites = [...colors, [.28, .28, .48]].map((color, index) => {
     const sprite = document.createElement('canvas'); sprite.width = sprite.height = 64;
     const context = sprite.getContext('2d')!;
     const g = context.createRadialGradient(32, 32, 0, 32, 32, 32);
     const rgb = color.map(v => Math.round(v * 255)).join(',');
-    g.addColorStop(0, '#fff'); g.addColorStop(.08, `rgba(${rgb},1)`); g.addColorStop(.22, `rgba(${rgb},.45)`); g.addColorStop(1, `rgba(${rgb},0)`);
+    g.addColorStop(0, index === 3 ? `rgba(${rgb},1)` : '#fff'); g.addColorStop(.08, `rgba(${rgb},1)`); g.addColorStop(.22, `rgba(${rgb},.45)`); g.addColorStop(1, `rgba(${rgb},0)`);
     context.fillStyle = g; context.fillRect(0, 0, 64, 64); return sprite;
   });
   function camera() {
@@ -379,7 +382,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
   function updatePackets() {
     packets.length = 0;
     // Large billboards provide spatial haze without blurring the interface or all geometry.
-    add(packets, [-.45, 0, -1.3], [.12, .18, .44], 1000, .23, 2, 0);
+    add(packets, [-.85, 0, -1.3], [.28, .28, .48], 1300, .46, 5, 0);
     add(packets, [1.7, .1, -1.1], [.12, .16, .44], 1000, .2, 2, 0);
     flowProbes.length = 0;
     // One origin per channel, with asynchronous departures along different fibres.
@@ -432,8 +435,8 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     for (let head = 0; head < 3; head++) {
       const p: Vec3 = [sourceX, headY[head], 0];
       const pulse = .92 + Math.sin(time * 7 + head) * .08;
-      add(packets, p, colors[head], 100 * pulse, .18, 2, 0);
-      add(packets, p, colors[head], 36 * pulse, .38, 2, 0);
+      add(packets, p, sourceTints[head], 100 * pulse, .22, 2, 0);
+      add(packets, p, sourceTints[head], 36 * pulse, .48, 2, 0);
       add(packets, p, colors[head], 12 * pulse, 1, 1, 0);
       // The input digits themselves translate toward the source at 2.1 traversals/second.
       for (let col = 0; col < 30; col++) for (let row = 0; row < 3; row++) {
@@ -443,7 +446,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
         const width = 1 - phase;
         const world: Vec3 = [-2.9 + phase * (2.9 + sourceX), headY[head] + ((row - 1) * .07 + (random(seed + 77) - .5) * .08) * width, ((row - 1) * .10 + random(seed + 20) * .08) * width];
         const edge = Math.min(1, phase * 12, (1 - phase) * 18);
-        add(packets, world, colors[head], 8 + random(seed + 19) * 8, edge * (.35 + random(seed) * .7), 0, random(seed));
+        add(packets, world, sourceTints[head], 8 + random(seed + 19) * 8, edge * (.55 + random(seed) * .75), 0, random(seed));
       }
     }
   }
@@ -501,7 +504,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     ctx.fillStyle = '#050711'; ctx.fillRect(0, 0, width, height); ctx.globalCompositeOperation = 'lighter';
     for (let head = 0; head < 3; head++) {
-      ctx.strokeStyle = `rgba(${colors[head].map(c => Math.round(c * 255)).join(',')},.13)`; ctx.lineWidth = .7;
+      ctx.strokeStyle = `rgba(${sourceTints[head].map(c => Math.round(c * 255)).join(',')},.24)`; ctx.lineWidth = .7;
       ctx.beginPath();
       for (let i = head * strandsPerHead; i < (head + 1) * strandsPerHead; i += 2) for (let k = 0; k <= 18; k++) {
         const p = project(curve(strands[i], k / 18)); if (k === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
@@ -526,7 +529,7 @@ export function mountSignalLoom(canvas: HTMLCanvasElement, options: SignalOption
       } else if (packets[i + 8] === 4) {
         ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(packets[i + 9]); ctx.scale(1.8, .55);
         ctx.drawImage(glowSprites[head], -size / 2, -size / 2, size, size); ctx.restore();
-      } else ctx.drawImage(glowSprites[head], p[0] - size / 2, p[1] - size / 2, size, size);
+      } else ctx.drawImage(glowSprites[packets[i + 8] === 5 ? 3 : head], p[0] - size / 2, p[1] - size / 2, size, size);
     }
     ctx.globalAlpha = 1;
   }
