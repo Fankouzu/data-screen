@@ -10,6 +10,7 @@ export const router = createRouter({
     { path: '/screens/market-neural', name: 'market-neural', component: () => import('../dashboards/market-neural/MarketNeural.vue'), meta: { title: 'Market Neural · 金融信号网络' } },
     { path: '/screens/vortex-desk', name: 'vortex-desk', component: () => import('../dashboards/vortex-desk/VortexDesk.vue'), meta: { title: 'Vortex Desk · 粒子涡旋交易台' } },
     { path: '/screens/signal-loom', name: 'signal-loom', component: () => import('../dashboards/signal-loom/SignalLoom.vue'), meta: { title: 'Signal Loom · 三维信号织机' } },
+    { path: '/screens/knowledge-engine', name: 'knowledge-engine', component: () => import('../dashboards/knowledge-engine/KnowledgeEngine.vue'), meta: { title: 'Knowledge Engine · 三维知识图谱' } },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue'), meta: { title: '未找到大屏' } },
   ],
   scrollBehavior: () => ({ top: 0 }),

@@ -3,6 +3,7 @@ import decisionGridPreview from '../assets/previews/decision-grid.webp'
 import marketNeuralPreview from '../assets/previews/market-neural.webp'
 import vortexDeskPreview from '../assets/previews/vortex-desk.webp'
 import signalLoomPreview from '../assets/previews/signal-loom.webp'
+import knowledgeEnginePreview from '../assets/previews/knowledge-engine.webp'
 
 export interface ScreenDefinition {
   id: string
@@ -99,11 +100,28 @@ export const screens: ScreenDefinition[] = [
     url: '/screens/signal-loom',
     preview: signalLoomPreview,
     date: '2026-10-26',
-    featured: true,
+    featured: false,
     highlights: [
       { value: '03', label: '信号通道' },
       { value: '12', label: '业务场景' },
       { value: '06', label: '巡游视角' },
+    ],
+  },
+  {
+    id: 'knowledge-engine',
+    title: 'Knowledge Engine',
+    subtitle: '三维知识图谱 · 文档协作引擎',
+    description: '穿行于珊瑚红与米白色的立体文档簇，追踪读取、写入、回答与冲突检查。十二个知识页面联动引用矩阵、文档差异和写入队列，金色源节点标出证据与冲突。',
+    category: '知识可视化',
+    tags: ['3D 知识图谱', '文档协作', '冲突检查'],
+    url: '/screens/knowledge-engine',
+    preview: knowledgeEnginePreview,
+    date: '2026-10-26',
+    featured: true,
+    highlights: [
+      { value: '12', label: '知识页面' },
+      { value: '3,206', label: '图谱节点' },
+      { value: '24s', label: '演示周期' },
     ],
   },
 ]

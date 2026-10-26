@@ -10,6 +10,8 @@
 
 - **Signal Loom**：三路彩色输入、立体二进制矩阵、发光丝束与六段镜头巡游，十二个业务场景联动推理监测面板。详见 [视频分析与实现](docs/signal-loom.md)。
 
+- **Knowledge Engine**：珊瑚红知识图谱、立体球形节点、文档写入波纹与来源冲突追踪，联动八个知识终端面板。详见 [视频分析与实现](docs/knowledge-engine.md)。
+
 ## 开发与生产构建
 
 推荐 Node.js 22 LTS（22.13+）或 Node.js 24 LTS。
@@ -40,6 +42,7 @@ npm run preview    # 本地验证生产产物，默认 4173
 | `/#/screens/market-neural` | 三维金融信号网络大屏 |
 | `/#/screens/vortex-desk` | 彩色粒子涡旋交易台 |
 | `/#/screens/signal-loom` | 三维信号织机 |
+| `/#/screens/knowledge-engine` | 三维知识图谱引擎 |
 | 其他 hash 路由 | 404 页面 |
 
 采用 hash 路由，支持 CDN、对象存储、Nginx 和子目录托管，刷新深链接无需服务端重写。
@@ -71,9 +74,13 @@ src/
   dashboards/signal-loom/
     SignalLoom.vue / style.css         # 信号终端布局与监测面板
     model.ts / engine.ts               # XYZ 数字墙、丝束、镜头巡游
+  dashboards/knowledge-engine/
+    KnowledgeEngine.vue / style.css    # 知识终端与八个监测面板
+    KnowledgeOverlays.vue              # 文档标签与浮动检查卡
+    model.ts / engine.ts               # 图谱几何、阶段时序与相机
   assets/previews/                     # 由 Vite 处理的预览资源
   styles/                             # 公共基础与索引样式
-tests/*.spec.ts                        # 五个大屏的浏览器端到端回归
+tests/*.spec.ts                        # 六个大屏的浏览器端到端回归
 deploy/nginx.conf                      # 容器生产服务配置
 Dockerfile                            # 多阶段构建
 .github/workflows/ci.yml               # 检查、测试、构建与产物归档
@@ -125,7 +132,7 @@ npm run test:e2e
 npm run check
 ```
 
-测试生产预览：五大屏索引的搜索/筛选/排序、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。Decision Grid 还验证 12 案例切换、五阶段推进，以及低于 0.85 置信度时的人工复核路径。Market Neural 验证完整融合周期、三种形态模式、暂停旋转和横竖屏布局边界。Vortex Desk 验证粒子深度与相机视差、五阶段与风险拦截、循环清理和响应式布局。
+测试生产预览：六大屏索引的搜索/筛选/排序、SPA 导航与三次重复挂载、动画循环清理、XYZ 深度和旋转视差、阶段数据、暂停/倍速、刷新深链接、404、手机布局、减少动态效果。Decision Grid 还验证 12 案例切换、五阶段推进，以及低于 0.85 置信度时的人工复核路径。Market Neural 验证完整融合周期、三种形态模式、暂停旋转和横竖屏布局边界。Vortex Desk 验证粒子深度与相机视差、五阶段与风险拦截、循环清理和响应式布局。
 
 如果本机已有 Chrome，也可以设置 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 为可执行文件路径。CI 使用 Playwright 官方 Chromium。推送 main 或打开 PR 后会运行 CI；成功构建的 `dist/` 可在 GitHub Actions artifacts 下载。Cloudflare Pages 的 Git 集成独立执行构建与发布，不等待 GitHub CI 完成。
 
@@ -146,7 +153,7 @@ npm run check
 | 环境变量 | `NODE_VERSION=24` |
 | 资源基础路径 | `/`（默认，不设置 `VITE_BASE_PATH`） |
 
-Cloudflare 自动安装锁文件中的依赖。使用现有 GitHub App 集成，不需要在仓库或 GitHub Actions 中保存 Cloudflare API Token。Hash 路由支持直接打开及刷新五个大屏，无需服务端路由规则。
+Cloudflare 自动安装锁文件中的依赖。使用现有 GitHub App 集成，不需要在仓库或 GitHub Actions 中保存 Cloudflare API Token。Hash 路由支持直接打开及刷新六个大屏，无需服务端路由规则。
 
 部署状态、日志及回滚入口位于 Cloudflare → Workers 和 Pages → `data-screen` → 部署。发布失败时先查看构建日志；需要回退时，可将之前的成功生产部署回滚。添加新大屏后提交并推送 `main` 即可发布。
 
@@ -185,6 +192,8 @@ Vortex Desk：拖动或方向键调整三维涡旋视角，滚轮或 `+` / `-` �
 
 Signal Loom：三路信号织入立体数字矩阵，27 秒巡游、十二个业务场景。拖动或方向键旋转，滚轮或 `+` / `-` 缩放，`0` 重置；工具栏支持暂停、倍速、重播和全屏。
 
-五个大屏在系统减少动态效果时均默认暂停。新大屏无需增加依赖，使用真实 XYZ 几何与透视投影；离开页面会清理绘制循环、事件、纹理缓存及尺寸观察器。
+Knowledge Engine：24 秒演示读取、写入、回答与冲突检查。节点从 2,788 增至 3,206，最多 11,483 条实际连线；可选择文档查看声明和来源，手动检查不改变演示流程目标。支持暂停、倍速、重播、旋转、缩放、重置和全屏。
+
+六个大屏在系统减少动态效果时均默认暂停。新大屏无需增加依赖，使用真实 XYZ 几何与透视投影；离开页面会清理绘制循环、事件、纹理缓存及尺寸观察器。
 
 目前使用模拟数据，无后台服务或凭据。WebGL 不可用时使用 Canvas 投影点云回退；全屏受浏览器权限限制。生产站点由 Cloudflare Pages 托管。
