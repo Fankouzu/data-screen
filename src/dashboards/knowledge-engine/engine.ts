@@ -1,13 +1,10 @@
 import { pages, patchOrder, type Vec3, type KnowledgeController, type KnowledgeOptions, type KnowledgeSnapshot, type KnowledgeLabel } from './model';
 
-type Color = [number, number, number];
+import { clusterColors, clusterColorCss, ivory, gold, background, type Color } from './palette';
 interface Node { position: Vec3; color: Color; size: number; cluster: number; seed: number; kind: number }
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 const random = (n: number) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
 const ease = (v: number) => { const t = clamp(v, 0, 1); return t * t * (3 - 2 * t); };
-const coral: Color = [.86, .31, .37];
-const ivory: Color = [.83, .81, .75];
-const gold: Color = [.95, .77, .26];
 const source: Vec3 = [-1.50, -.38, .14];
 const stride = 10;
 
@@ -89,10 +86,10 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
   let selected: number | undefined;
   let pose = { yaw: 0, pitch: 0, x: 0, y: 0, zoom: 1 };
   let focus: { world: Vec3; cluster: number; yaw: number; pitch: number; record: string | null } | undefined;
-  let transition: { from: typeof pose; elapsed: number } | undefined;
+  let transition: { from: typeof pose; elapsed: number; duration: number } | undefined;
   let pointer: { id: number; x: number; y: number; startX: number; startY: number } | undefined;
   const nodes: Node[] = [];
-  pages.forEach((page, cluster) => nodes.push({ position: [...page.position], color: [3, 6].includes(cluster) ? ivory : coral, size: cluster === 6 ? 36 : cluster === 3 ? 30 : 23, cluster, seed: random(cluster), kind: [3, 6].includes(cluster) ? 3 : 0 }));
+  pages.forEach((page, cluster) => nodes.push({ position: [...page.position], color: clusterColors[cluster]!, size: cluster === 6 ? 36 : cluster === 3 ? 30 : 23, cluster, seed: random(cluster), kind: [3, 6].includes(cluster) ? 3 : 0 }));
   nodes.push({ position: source, color: gold, size: 26, cluster: -1, seed: .5, kind: 0 });
   for (let i = nodes.length; i < 3206; i++) {
     const cluster = i < 55 ? -1 : (i - 55) % pages.length;
@@ -106,7 +103,8 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     const turn = cluster * .51;
     const position: Vec3 = [center[0] + dx * Math.cos(turn) - dy * Math.sin(turn), center[1] + dx * Math.sin(turn) + dy * Math.cos(turn), center[2] + az * radius * .48];
     const n = random(i + 43);
-    const color: Color = cluster < 0 || n > .83 ? ivory : n > .20 ? [.98, .42 + random(i + 3) * .12, .48] : [.64, .24, .28];
+    const base = cluster < 0 ? gold : clusterColors[cluster]!;
+    const color: Color = n > .94 ? ivory : base.map(channel => channel * (.65 + n * .35)) as Color;
     const sizeSeed = random(i + 572);
     const size = cluster < 0 ? 1.8 + random(i) * 2 : sizeSeed > .975 ? 11 + random(i) * 5 : sizeSeed > .90 ? 5.5 + random(i) * 3 : sizeSeed > .53 ? 2.9 + random(i) * 2.8 : 1.5 + random(i) * 1.8;
     nodes.push({ position, color, size, cluster, seed: random(i + 91), kind: 0 });
@@ -155,10 +153,10 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
   const lineData = new Float32Array(edges.flatMap(([a, b]) => [a, b].flatMap(id => {
     const node = nodes[id]!;
     const bridge = nodes[a]!.cluster !== nodes[b]!.cluster;
-    const color: Color = bridge || node.cluster < 0 ? [.51, .45, .40] : [.65, .31, .34];
-    return pack(node, bridge ? .04 : .09 + random(a + b) * .09, 1, color);
+    const color: Color = node.cluster < 0 ? gold : clusterColors[node.cluster]!;
+    return pack(node, bridge ? .055 : .10 + random(a + b) * .10, 1, color);
   })));
-  const halos = new Float32Array(pages.flatMap((_, i) => pack(nodes[i]!, 180 + i % 3 * 22, 2, [.67, .15, .2])));
+  const halos = new Float32Array(pages.flatMap((_, i) => pack(nodes[i]!, 180 + i % 3 * 22, 2, clusterColors[i]!)));
   const transient: number[] = [];
   const traceLines: number[] = [];
   const gl = canvas.getContext('webgl', { alpha: false, antialias: true, powerPreference: 'high-performance' });
@@ -238,25 +236,26 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
       const scale = Math.min(width / 4.25, height / 3.95) * pose.zoom;
       pose.x = (width * (width < 560 ? .5 : .42) - anchor.x) / scale;
       pose.y = (height * (width < 560 ? .28 : .52) - anchor.y) / scale;
-      if (transition) {
-        const blend = ease(transition.elapsed / .65);
-        const from = transition.from;
-        pose = { yaw: from.yaw + (pose.yaw - from.yaw) * blend, pitch: from.pitch + (pose.pitch - from.pitch) * blend,
-          x: from.x + (pose.x - from.x) * blend, y: from.y + (pose.y - from.y) * blend, zoom: from.zoom + (pose.zoom - from.zoom) * blend };
-        if (blend === 1) transition = undefined;
-      }
-      return;
+    } else {
+      const t = time % 24;
+      const keyframes = [
+        [-.16, -.05, 0, 0, 1], [.14, .03, -.03, .02, 1.13], [-.26, -.04, -.14, .50, 1.30],
+        [.19, .05, -.10, .05, 1.15], [.28, .02, -.52, .08, 1.30], [-.24, -.04, .02, 0, 1.05],
+        [.12, .06, -.06, .60, 1.04], [.32, .01, -.08, .35, 1.02], [-.16, -.05, 0, 0, 1],
+      ];
+      const k = Math.floor(t / 3), blend = ease((t % 3 - 1.9) / 1.1);
+      const a = keyframes[k]!, b = keyframes[k + 1]!;
+      const v = a.map((n, i) => n + (b[i]! - n) * blend);
+      pose = { yaw: v[0]! + Math.sin(t * .3) * .025 + yaw, pitch: v[1]! + pitch, x: v[2]!, y: v[3]!, zoom: v[4]! * zoom };
     }
-    const t = time % 24;
-    const keyframes = [
-      [-.16, -.05, 0, 0, 1], [.14, .03, -.03, .02, 1.13], [-.26, -.04, -.14, .50, 1.30],
-      [.19, .05, -.10, .05, 1.15], [.28, .02, -.52, .08, 1.30], [-.24, -.04, .02, 0, 1.05],
-      [.12, .06, -.06, .60, 1.04], [.32, .01, -.08, .35, 1.02], [-.16, -.05, 0, 0, 1],
-    ];
-    const k = Math.floor(t / 3), blend = ease((t % 3 - 1.9) / 1.1);
-    const a = keyframes[k]!, b = keyframes[k + 1]!;
-    const v = a.map((n, i) => n + (b[i]! - n) * blend);
-    pose = { yaw: v[0]! + Math.sin(t * .3) * .025 + yaw, pitch: v[1]! + pitch, x: v[2]!, y: v[3]!, zoom: v[4]! * zoom };
+    // Both focus and return blend from the rendered pose into the live destination.
+    if (transition) {
+      const blend = ease(transition.elapsed / transition.duration);
+      const from = transition.from;
+      pose = { yaw: from.yaw + (pose.yaw - from.yaw) * blend, pitch: from.pitch + (pose.pitch - from.pitch) * blend,
+        x: from.x + (pose.x - from.x) * blend, y: from.y + (pose.y - from.y) * blend, zoom: from.zoom + (pose.zoom - from.zoom) * blend };
+      if (blend === 1) transition = undefined;
+    }
   }
   function project(world: Vec3, cluster = -1): { x: number; y: number; scale: number; depth: number } {
     let [x, y] = world;
@@ -306,7 +305,7 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
         for (let k = 0; k < 64; k++) {
           const angle = k / 64 * Math.PI * 2;
           const p: Vec3 = [active.position[0] + Math.cos(angle) * r, active.position[1] + Math.sin(angle) * r, active.position[2] + Math.sin(angle * 2) * .03];
-          transient.push(...pack({ position: p, color: state.conflicts ? gold : [.9, .43, .36], size: 1.3 + pulse * .7, cluster: state.workPage, seed: k / 64, kind: 0 }));
+          transient.push(...pack({ position: p, color: state.conflicts ? gold : clusterColors[state.workPage]!, size: 1.3 + pulse * .7, cluster: state.workPage, seed: k / 64, kind: 0 }));
         }
       }
     }
@@ -315,7 +314,7 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
       const t = (time * .75 + i / 9) % 1;
       const from = nodes[(state.workPage + 4 + i) % 12]!.position;
       const p = from.map((v, axis) => v + (active.position[axis]! - v) * t) as Vec3;
-      transient.push(...pack({ position: p, color: state.conflicts ? gold : [.95, .74, .63], size: 2.4, cluster: -1, seed: i, kind: 0 }));
+      transient.push(...pack({ position: p, color: state.conflicts ? gold : ivory, size: 2.4, cluster: -1, seed: i, kind: 0 }));
     }
     if (state.conflicts || focus?.record === 'raw/source-017.pdf') {
       const otherSource: Vec3 = [.74, -.76, .75];
@@ -330,7 +329,7 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
   function drawGpu(state: KnowledgeSnapshot) {
     if (!gl || !program || !gpuReady) return;
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(.055, .069, .064, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.clearColor(...background, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(program); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniform2f(uniforms.resolution, width, height); gl.uniform4f(uniforms.camera, pose.yaw, pose.pitch, pose.x, pose.zoom);
     gl.uniform3f(uniforms.state, time, pose.y, 0); gl.uniform1f(uniforms.dpr, dpr);
@@ -347,7 +346,10 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     draw(0, state.nodeCount); draw(3, transient.length / stride);
     gl.disable(gl.DEPTH_TEST);
   }
-  const sphereSprites = [coral, ivory, gold].map(color => {
+  // Batch fallback links by document color once, without rebuilding geometry each frame.
+  const fallbackEdgeGroups = Array.from({ length: 13 }, () => [] as number[]);
+  edges.forEach(([a], index) => { if (index % 2 === 0) fallbackEdgeGroups[nodes[a]!.cluster < 0 ? 12 : nodes[a]!.cluster]!.push(index); });
+  const sphereSprites = [...clusterColors, ivory, gold].map(color => {
     const sprite = document.createElement('canvas'); sprite.width = sprite.height = 48;
     const context = sprite.getContext('2d')!;
     const gradient = context.createRadialGradient(16, 13, 1, 24, 24, 24);
@@ -359,11 +361,19 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
   function drawFallback(state: KnowledgeSnapshot) {
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1;
-    ctx.fillStyle = '#0e1210'; ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#070b14'; ctx.fillRect(0, 0, width, height);
     const projected = nodes.slice(0, state.nodeCount).map(node => ({ ...project(node.position, node.cluster), node }));
-    ctx.strokeStyle = '#794148'; ctx.lineWidth = .45; ctx.globalAlpha = .35; ctx.beginPath();
-    for (let i = 0; i < activeEdges(state.nodeCount); i += 2) { const [a, b] = edges[i]!; const p = projected[a]!, q = projected[b]!; ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }
-    ctx.stroke();
+    ctx.lineWidth = .45; ctx.globalAlpha = .25;
+    const edgeCount = activeEdges(state.nodeCount);
+    for (let cluster = 0; cluster < fallbackEdgeGroups.length; cluster++) {
+      ctx.strokeStyle = clusterColorCss(cluster); ctx.beginPath();
+      for (const i of fallbackEdgeGroups[cluster]!) {
+        if (i >= edgeCount) break;
+        const [a, b] = edges[i]!; const p = projected[a]!, q = projected[b]!;
+        ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
+      }
+      ctx.stroke();
+    }
     ctx.strokeStyle = '#d7ba54'; ctx.globalAlpha = .6; ctx.beginPath();
     for (let i = 0; i < traceLines.length; i += stride * 2) {
       const p = project([traceLines[i]!, traceLines[i + 1]!, traceLines[i + 2]!], traceLines[i + 7]!);
@@ -374,7 +384,7 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     projected.sort((a, b) => a.depth - b.depth);
     for (const p of projected) {
       if (p.x < -30 || p.x > width + 30 || p.y < -30 || p.y > height + 30) continue;
-      const kind = p.node.cluster === -1 || (state.conflicts && p.node.cluster === state.workPage && p.node.size >= 18) ? 2 : p.node.color[1] > .6 ? 1 : 0;
+      const kind = p.node.cluster === -1 || (state.conflicts && p.node.cluster === state.workPage && p.node.size >= 18) ? 13 : p.node.color === ivory ? 12 : p.node.cluster;
       const size = p.node.size * p.scale;
       ctx.globalAlpha = clamp(.75 + p.depth * .16, .38, 1);
       ctx.drawImage(sphereSprites[kind]!, p.x - size / 2, p.y - size / 2, size, size);
@@ -382,7 +392,7 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     for (let i = 0; i < transient.length; i += stride) {
       const p = project([transient[i]!, transient[i + 1]!, transient[i + 2]!], transient[i + 7]!);
       const size = transient[i + 6]! * p.scale;
-      ctx.globalAlpha = .85; ctx.drawImage(sphereSprites[state.conflicts || transient[i + 6]! >= 18 ? 2 : 1]!, p.x - size / 2, p.y - size / 2, size, size);
+      ctx.globalAlpha = .85; ctx.drawImage(sphereSprites[state.conflicts || transient[i + 6]! >= 18 ? 13 : transient[i + 7]! >= 0 ? transient[i + 7]! : 12]!, p.x - size / 2, p.y - size / 2, size, size);
     }
     ctx.globalAlpha = 1;
   }
@@ -415,12 +425,14 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     selected = index;
     focus = { world: [...world], cluster, yaw: pose.yaw - yaw, pitch: pose.pitch - pitch, record };
     zoom = 1;
-    transition = matchMedia('(prefers-reduced-motion: reduce)').matches ? undefined : { from, elapsed: 0 };
+    transition = matchMedia('(prefers-reduced-motion: reduce)').matches ? undefined : { from, elapsed: 0, duration: .65 };
     lastTime = performance.now(); updateView();
   }
   function resetView() {
-    yaw = pitch = 0; zoom = 1; selected = undefined; focus = transition = undefined;
-    updateView();
+    const from = { ...pose };
+    yaw = pitch = 0; zoom = 1; selected = undefined; focus = undefined;
+    transition = matchMedia('(prefers-reduced-motion: reduce)').matches ? undefined : { from, elapsed: 0, duration: .85 };
+    lastTime = performance.now(); updateView();
   }
   canvas.addEventListener('pointerdown', event => { if (event.button !== 0) return; pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY }; canvas.setPointerCapture(event.pointerId); }, { signal: abort.signal });
   canvas.addEventListener('pointermove', event => { if (!pointer || pointer.id !== event.pointerId) return; yaw += (event.clientX - pointer.x) * .005; pitch = clamp(pitch + (event.clientY - pointer.y) * .003, -.6, .6); pointer.x = event.clientX; pointer.y = event.clientY; updateView(); }, { signal: abort.signal });
@@ -471,7 +483,7 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     getSnapshot: snapshot,
     debug() {
       const probes: Vec3[] = [[.3, .3, -.9], [.3, .3, .9], source, pages[6]!.position];
-      return { renderer: gpuReady ? 'webgl' : 'canvas2d', nodeCount: snapshot().nodeCount, linkCount: activeEdges(snapshot().nodeCount), depthRange: { min: Math.min(...nodes.map(n => n.position[2])), max: Math.max(...nodes.map(n => n.position[2])) }, rotation: { yaw, pitch, zoom }, focus: focus ? { world: [...focus.world] as Vec3, screen: [project(focus.world, focus.cluster).x, project(focus.world, focus.cluster).y] as [number, number], progress: transition ? clamp(transition.elapsed / .65, 0, 1) : 1 } : null, disposed, activeFrame: raf !== 0, frameCount,
+      return { renderer: gpuReady ? 'webgl' : 'canvas2d', nodeCount: snapshot().nodeCount, linkCount: activeEdges(snapshot().nodeCount), depthRange: { min: Math.min(...nodes.map(n => n.position[2])), max: Math.max(...nodes.map(n => n.position[2])) }, rotation: { yaw, pitch, zoom }, focus: focus ? { world: [...focus.world] as Vec3, screen: [project(focus.world, focus.cluster).x, project(focus.world, focus.cluster).y] as [number, number], progress: transition ? clamp(transition.elapsed / transition.duration, 0, 1) : 1 } : null, disposed, activeFrame: raf !== 0, frameCount,
         probes: probes.map(world => { const p = project(world); return { world: [...world] as Vec3, screen: [p.x, p.y] as [number, number], depth: p.depth }; }) };
     },
     dispose() { if (disposed) return; disposed = true; if (raf) cancelAnimationFrame(raf); raf = 0; observer.disconnect(); abort.abort(); releaseGpu(); fallbackCanvas?.remove(); canvas.style.opacity = originalOpacity; },

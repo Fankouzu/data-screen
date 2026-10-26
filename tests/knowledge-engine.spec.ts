@@ -293,6 +293,8 @@ test('Clicking a document smoothly zooms and centers it while paused, then retur
   await expect(page.locator('.ke-floating-inspector')).toContainText('Route context across sessions');
   await page.getByRole('button', { name: '返回全景' }).click();
   expect((await state(page)).inspecting).toBe(false);
+  expect((await state(page)).zoom).toBeCloseTo(movement.after.zoom);
+  await page.evaluate(() => window.__stepKnowledge!(performance.now() + 1000));
   expect((await state(page)).zoom).toBeCloseTo(before.zoom);
   expect(await page.evaluate(() => window.knowledgeEngine!.debug().focus)).toBeNull();
 });
@@ -333,6 +335,9 @@ test('Reduced-motion mobile inspection jumps to a readable focused view without 
   });
   expect(layout.inside).toBe(true);
   expect(layout.size).toBeGreaterThanOrEqual(12);
+  await page.getByRole('button', { name: '返回全景' }).click();
+  expect((await state(page)).zoom).toBeCloseTo(before.zoom);
+  expect(await page.evaluate(() => window.knowledgeEngine!.debug().activeFrame)).toBe(false);
 });
 
 
@@ -402,4 +407,39 @@ test('Mobile raw-source details fit the scene and the inspected source survives 
   await page.getByRole('button', { name: '返回全景' }).click();
   expect((await state(page)).inspecting).toBe(false);
   await expect(page.getByText('017 / WEEKLY', { exact: true })).toHaveCount(0);
+});
+
+test('Returning to overview eases out from the current camera even while paused and can be interrupted', async ({ page }) => {
+  await controlFrames(page);
+  await open(page);
+  await page.evaluate(() => {
+    const c = window.knowledgeEngine!;
+    c.setPaused(true); c.selectPage(1);
+    window.__stepKnowledge!(performance.now() + 800);
+  });
+  const before = await page.evaluate(() => ({ state: window.knowledgeEngine!.getSnapshot(), debug: window.knowledgeEngine!.debug() }));
+  await page.getByRole('button', { name: '返回全景' }).click();
+  const returning = await page.evaluate(() => ({ state: window.knowledgeEngine!.getSnapshot(), debug: window.knowledgeEngine!.debug() }));
+  expect(returning.state.zoom).toBeCloseTo(before.state.zoom);
+  expect(returning.debug.probes.map(p => p.screen)).toEqual(before.debug.probes.map(p => p.screen));
+  expect(returning.debug.activeFrame).toBe(true);
+  expect(returning.state.inspecting).toBe(false);
+  const result = await page.evaluate(() => {
+    const c = window.knowledgeEngine!;
+    const start = performance.now();
+    window.__stepKnowledge!(start + 300);
+    const middle = c.getSnapshot();
+    c.selectPage(7);
+    const interrupted = c.getSnapshot();
+    window.__stepKnowledge!(performance.now() + 800);
+    c.resetView();
+    window.__stepKnowledge!(performance.now() + 1000);
+    return { middle, interrupted, end: c.getSnapshot(), activeFrame: c.debug().activeFrame };
+  });
+  expect(result.middle.zoom).toBeLessThan(before.state.zoom);
+  expect(result.middle.zoom).toBeGreaterThan(result.end.zoom);
+  expect(result.interrupted.zoom).toBeCloseTo(result.middle.zoom);
+  expect(result.end.zoom).toBeLessThan(1.4);
+  expect(result.end.time).toBe(before.state.time);
+  expect(result.activeFrame).toBe(false);
 });

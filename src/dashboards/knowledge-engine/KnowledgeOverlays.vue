@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
+import { clusterColorCss } from './palette';
 import { pages, type KnowledgeOverlay, type KnowledgeSnapshot } from './model';
 const props = defineProps<{ snapshot: KnowledgeSnapshot }>();
 const emit = defineEmits<{ select: [index: number]; reset: [] }>();
@@ -40,7 +41,7 @@ onBeforeUnmount(() => observer?.disconnect());
 <template>
   <div ref="root" class="ke-overlays">
     <template v-for="label in overlay.labels" :key="label.id">
-      <button v-if="label.kind === 'page'" v-show="label.visible" type="button" class="ke-node-label ke-page-label" :class="{ active: label.active }" :data-page="label.id" :aria-label="`查看 ${label.text}`" :aria-pressed="label.active" :style="{ transform: `translate3d(${label.x}px,${label.y}px,0) scale(${label.scale})` }" @click="select(label.id)">{{ label.text }}</button>
+      <button v-if="label.kind === 'page'" v-show="label.visible" type="button" class="ke-node-label ke-page-label" :class="{ active: label.active }" :data-page="label.id" :aria-label="`查看 ${label.text}`" :aria-pressed="label.active" :style="{ '--ke-node': clusterColorCss(Number(label.id.slice(5))), transform: `translate3d(${label.x}px,${label.y}px,0) scale(${label.scale})` }" @click="select(label.id)">{{ label.text }}</button>
       <span v-else v-show="label.visible" class="ke-node-label" :class="`ke-${label.kind}-label`" :style="{ transform: `translate3d(${label.x}px,${label.y}px,0) scale(${label.scale})` }" aria-hidden="true">{{ label.text }}</span>
     </template>
     <aside ref="inspector" v-show="overlay.anchor.visible" class="ke-floating-inspector" :class="{ conflict: selectedConflict, expanded: snapshot.inspecting }" :style="cardPosition" aria-label="图谱当前页面详情">

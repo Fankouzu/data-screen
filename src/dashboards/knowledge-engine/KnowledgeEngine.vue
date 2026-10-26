@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { mountKnowledgeEngine } from './engine';
+import { clusterColorCss } from './palette';
 import { pages, patchOrder, initialKnowledgeSnapshot, type KnowledgeController, type KnowledgeSnapshot } from './model';
 import KnowledgeOverlays from './KnowledgeOverlays.vue';
 import './style.css';
@@ -56,7 +57,7 @@ const queueRows = computed(() => patchOrder.map((index, order) => ({ index, name
 const matrix = computed(() => Array.from({ length: 91 }, (_, i) => {
   const col = i % 13;
   const on = noise(i * 4 + Math.floor(snapshot.value.time * .8)) > .62;
-  return { opacity: on ? .75 + noise(i) * .25 : .2 + noise(i + 13) * .18, color: col === 0 ? '#dac46d' : on && col <= snapshot.value.committed ? '#e7737d' : '#929a95' };
+  return { opacity: on ? .75 + noise(i) * .25 : .2 + noise(i + 13) * .18, color: col === 0 ? '#dac46d' : on && col <= snapshot.value.committed ? clusterColorCss(col - 1) : '#6b7f9b' };
 }));
 const histogram = computed(() => Array.from({ length: 38 }, (_, i) => 4 + noise(i + tick.value) * 25 + (i < 16 ? Math.max(0, Math.sin((i + tick.value * .2) * .19)) * 42 : 0)));
 const miniNodes = Array.from({ length: 14 }, (_, i) => ({ x: 12 + noise(i * 3) * 98, y: 7 + noise(i * 5 + 11) * 48 }));

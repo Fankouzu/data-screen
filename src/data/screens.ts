@@ -111,7 +111,7 @@ export const screens: ScreenDefinition[] = [
     id: 'knowledge-engine',
     title: 'Knowledge Engine',
     subtitle: '三维知识图谱 · 文档协作引擎',
-    description: '穿行于珊瑚红与米白色的立体文档簇，追踪读取、写入、回答与冲突检查。十二个知识页面联动引用矩阵、文档差异和写入队列，金色源节点标出证据与冲突。',
+    description: '穿行于青蓝、紫色与珊瑚橙交织的立体文档簇，追踪读取、写入、回答与冲突检查。十二个知识页面联动引用矩阵、文档差异和写入队列，金色源节点标出证据与冲突。',
     category: '知识可视化',
     tags: ['3D 知识图谱', '文档协作', '冲突检查'],
     url: '/screens/knowledge-engine',
