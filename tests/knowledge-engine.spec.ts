@@ -259,3 +259,147 @@ test('Knowledge Engine handles GPU context loss and disposes the fallback', asyn
   await expect(page.locator('canvas')).toHaveCount(0);
   expect(await page.evaluate(() => typeof window.knowledgeEngine)).toBe('undefined');
 });
+
+test('Clicking a document smoothly zooms and centers it while paused, then returns to the overview', async ({ page }) => {
+  await controlFrames(page);
+  await open(page);
+  await page.evaluate(() => window.knowledgeEngine!.setPaused(true));
+  const before = await state(page);
+  await page.locator('[data-page="page-1"]').click();
+  const selected = await state(page);
+  expect(selected.activePage).toBe(1);
+  expect(selected.zoom).toBeCloseTo(before.zoom);
+  const movement = await page.evaluate(() => {
+    const controller = window.knowledgeEngine!;
+    const start = performance.now();
+    window.__stepKnowledge!(start + 200);
+    const middle = controller.getSnapshot();
+    window.__stepKnowledge!(start + 800);
+    const after = controller.getSnapshot();
+    const debug = controller.debug();
+    const bounds = document.querySelector('.ke-scene')!.getBoundingClientRect();
+    return { middle, after, focus: debug.focus, activeFrame: debug.activeFrame, width: bounds.width, height: bounds.height };
+  });
+  expect(movement.middle.zoom).toBeGreaterThan(before.zoom);
+  expect(movement.middle.zoom).toBeLessThan(movement.after.zoom);
+  expect(movement.after.zoom).toBeGreaterThan(before.zoom * 1.7);
+  expect(movement.after.time).toBe(before.time);
+  expect(movement.after.workPage).toBe(before.workPage);
+  expect(movement.focus!.progress).toBe(1);
+  expect(movement.focus!.screen[0]).toBeCloseTo(movement.width * .42, 0);
+  expect(movement.focus!.screen[1]).toBeCloseTo(movement.height * .52, 0);
+  expect(movement.activeFrame).toBe(false);
+  await expect(page.locator('.ke-floating-inspector')).toHaveClass(/expanded/);
+  await expect(page.locator('.ke-floating-inspector')).toContainText('Route context across sessions');
+  await page.getByRole('button', { name: '返回全景' }).click();
+  expect((await state(page)).inspecting).toBe(false);
+  expect((await state(page)).zoom).toBeCloseTo(before.zoom);
+  expect(await page.evaluate(() => window.knowledgeEngine!.debug().focus)).toBeNull();
+});
+
+test('Canvas node picking opens its source details and pending focus frames are disposed on navigation', async ({ page }) => {
+  await controlFrames(page);
+  await open(page);
+  await page.evaluate(() => window.knowledgeEngine!.setPaused(true));
+  const source = await page.evaluate(() => window.knowledgeEngine!.debug().probes[2]!.screen);
+  const canvas = page.locator('.ke-scene > canvas').first();
+  const bounds = (await canvas.boundingBox())!;
+  await page.mouse.click(bounds.x + source[0], bounds.y + source[1]);
+  expect((await state(page)).inspectedRecord).toBe('raw/source-042.pdf');
+  await expect(page.locator('.ke-floating-inspector strong')).toHaveText('raw/source-042.pdf');
+  expect(await page.evaluate(() => window.knowledgeEngine!.debug().activeFrame)).toBe(true);
+  await page.getByRole('link', { name: '返回大屏索引' }).press('Enter');
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(6);
+  expect(await page.evaluate(() => window.__knowledgeFrames!.size)).toBe(0);
+  expect(await page.evaluate(() => typeof window.knowledgeEngine)).toBe('undefined');
+});
+
+test('Reduced-motion mobile inspection jumps to a readable focused view without starting animation', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await open(page);
+  const before = await state(page);
+  await page.getByRole('button', { name: '检查 capture.md', exact: true }).click();
+  const after = await state(page);
+  expect(after.paused).toBe(true);
+  expect(after.time).toBe(before.time);
+  expect(after.zoom).toBeGreaterThan(before.zoom * 1.7);
+  expect(await page.evaluate(() => window.knowledgeEngine!.debug().activeFrame)).toBe(false);
+  await expect(page.locator('.ke-floating-inspector')).toBeVisible();
+  const layout = await page.locator('.ke-floating-inspector').evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const scene = element.closest('.ke-scene')!.getBoundingClientRect();
+    return { inside: rect.left >= scene.left && rect.right <= scene.right && rect.top >= scene.top && rect.bottom <= scene.bottom, size: parseFloat(getComputedStyle(element.querySelector('p')!).fontSize) };
+  });
+  expect(layout.inside).toBe(true);
+  expect(layout.size).toBeGreaterThanOrEqual(12);
+});
+
+
+test('Retargeting focus is continuous and stays on the inspected node across workflow phases', async ({ page }) => {
+  await controlFrames(page);
+  await open(page);
+  const result = await page.evaluate(() => {
+    const c = window.knowledgeEngine!;
+    c.selectPage(1);
+    window.__stepKnowledge!(performance.now() + 180);
+    const before = c.getSnapshot();
+    c.selectPage(7);
+    const retargeted = c.getSnapshot();
+    const start = performance.now();
+    window.__stepKnowledge!(start + 800);
+    const focused = c.getSnapshot();
+    window.__stepKnowledge!(start + 21000);
+    return { before, retargeted, focused, later: c.getSnapshot(), focus: c.debug().focus };
+  });
+  expect(result.retargeted.zoom).toBeCloseTo(result.before.zoom);
+  expect(result.focused.zoom).toBeGreaterThan(result.before.zoom);
+  expect(result.later.phase).toBe('CHECKER');
+  expect(result.later.workPage).toBe(3);
+  expect(result.later.activePage).toBe(7);
+  expect(result.later.claim).toBe('Keep every original untouched');
+  expect(result.later.zoom).toBeCloseTo(result.focused.zoom);
+  expect(result.focus!.progress).toBe(1);
+});
+
+test('Mobile raw-source details fit the scene and the inspected source survives the workflow loop', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await controlFrames(page);
+  await open(page);
+  await page.evaluate(() => {
+    const c = window.knowledgeEngine!;
+    c.restart(); c.setPaused(false);
+    const start = performance.now();
+    window.__stepKnowledge!(start);
+    window.__stepKnowledge!(start + 21000);
+    c.setPaused(true);
+  });
+  const source = await page.getByText('017 / WEEKLY', { exact: true }).evaluate(element => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    const scene = element.closest('.ke-scene')!.getBoundingClientRect();
+    return { x: scene.x + matrix.m41 - 10, y: scene.y + matrix.m42 - 5 };
+  });
+  await page.mouse.click(source.x, source.y);
+  expect((await state(page)).inspectedRecord).toBe('raw/source-017.pdf');
+  await expect.poll(() => page.locator('.ke-floating-inspector').evaluate(element => {
+    const card = element.getBoundingClientRect();
+    const scene = element.closest('.ke-scene')!.getBoundingClientRect();
+    const button = element.querySelector('button')!.getBoundingClientRect();
+    return card.bottom <= scene.bottom && button.bottom <= scene.bottom && card.top >= scene.top;
+  })).toBe(true);
+  await page.evaluate(() => {
+    const c = window.knowledgeEngine!;
+    c.setPaused(false);
+    window.__stepKnowledge!(performance.now() + 4000);
+    c.setPaused(true);
+  });
+  expect((await state(page)).phase).toBe('READER');
+  expect((await state(page)).inspectedRecord).toBe('raw/source-017.pdf');
+  await expect(page.getByText('017 / WEEKLY', { exact: true })).toBeVisible();
+  await expect(page.locator('.ke-floating-inspector strong')).toHaveText('raw/source-017.pdf');
+  await page.screenshot({ path: '../knowledge-engine-focus-mobile-source.png' });
+  await page.getByRole('button', { name: '返回全景' }).click();
+  expect((await state(page)).inspecting).toBe(false);
+  await expect(page.getByText('017 / WEEKLY', { exact: true })).toHaveCount(0);
+});

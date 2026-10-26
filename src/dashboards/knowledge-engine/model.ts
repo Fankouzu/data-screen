@@ -17,7 +17,7 @@ export const pages: { name: string; position: Vec3; claim: string }[] = [
 export const patchOrder = [7, 9, 3, 8, 5, 2, 0, 1, 6, 11, 10, 4];
 export interface KnowledgeSnapshot {
   time: number; paused: boolean; speed: number; fps: number;
-  phase: KnowledgePhase; stageLabel: string; activePage: number; workPage: number; inspecting: boolean; committed: number;
+  phase: KnowledgePhase; stageLabel: string; activePage: number; workPage: number; inspecting: boolean; inspectedRecord: string | null; committed: number;
   nodeCount: number; linkCount: number; scanned: number; conflicts: number;
   command: string; claim: string; azimuth: number; zoom: number;
 }
@@ -26,6 +26,7 @@ export interface KnowledgeOverlay { labels: KnowledgeLabel[]; anchor: { x: numbe
 export interface KnowledgeDiagnostics {
   renderer: 'webgl' | 'canvas2d'; nodeCount: number; linkCount: number;
   depthRange: { min: number; max: number }; rotation: { yaw: number; pitch: number; zoom: number };
+  focus: { world: Vec3; screen: [number, number]; progress: number } | null;
   disposed: boolean; activeFrame: boolean; frameCount: number;
   probes: { world: Vec3; screen: [number, number]; depth: number }[];
 }
@@ -36,7 +37,7 @@ export interface KnowledgeController {
 }
 export interface KnowledgeOptions { initialPaused?: boolean; onUpdate(snapshot: KnowledgeSnapshot): void; onOverlay?(overlay: KnowledgeOverlay): void; }
 export const initialKnowledgeSnapshot: KnowledgeSnapshot = {
-  time: 0, paused: false, speed: 1, fps: 60, phase: 'READER', stageLabel: 'INGEST', activePage: 7, workPage: 7, inspecting: false, committed: 0,
+  time: 0, paused: false, speed: 1, fps: 60, phase: 'READER', stageLabel: 'INGEST', activePage: 7, workPage: 7, inspecting: false, inspectedRecord: null, committed: 0,
   nodeCount: 2788, linkCount: 10240, scanned: 0, conflicts: 0, command: '> reader ingest raw/source-042.pdf --read-only',
   claim: 'Keep every original untouched', azimuth: 0, zoom: 1,
 };

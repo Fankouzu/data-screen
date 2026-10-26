@@ -102,7 +102,7 @@ onBeforeUnmount(() => {
     <section class="ke-scene" aria-label="三维知识图谱">
       <canvas ref="canvas" tabindex="0" aria-label="立体知识图谱。拖动或方向键旋转，滚轮缩放，选择文档查看信息。"></canvas>
       <div class="ke-scene-caption"><span>GRAPH / {{ snapshot.nodeCount.toLocaleString('en-US') }} RECORDS · {{ snapshot.linkCount.toLocaleString('en-US') }} LINKS</span><span>AZ {{ snapshot.azimuth.toFixed(1) }}° &nbsp; Z {{ Math.round(snapshot.zoom * 100) }}</span></div>
-      <KnowledgeOverlays ref="overlays" :snapshot="snapshot" @select="selectPage"/>
+      <KnowledgeOverlays ref="overlays" :snapshot="snapshot" @select="selectPage" @reset="controller?.resetView()"/>
       <div class="ke-wordmark" aria-hidden="true">ARGONA</div>
       <div class="ke-scene-log">— {{ (snapshot.time % 24).toFixed(2) }} &nbsp; {{ snapshot.phase.toLowerCase() }} :: {{ workDocumentName }} · {{ snapshot.stageLabel.toLowerCase() }} <span>{{ snapshot.phase === 'LIBRARIAN' ? '+8 / −1' : snapshot.conflicts ? 'evidence conflict' : 'source verified' }}</span></div>
     </section>

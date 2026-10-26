@@ -88,6 +88,8 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
   let yaw = 0, pitch = 0, zoom = 1;
   let selected: number | undefined;
   let pose = { yaw: 0, pitch: 0, x: 0, y: 0, zoom: 1 };
+  let focus: { world: Vec3; cluster: number; yaw: number; pitch: number; record: string | null } | undefined;
+  let transition: { from: typeof pose; elapsed: number } | undefined;
   let pointer: { id: number; x: number; y: number; startX: number; startY: number } | undefined;
   const nodes: Node[] = [];
   pages.forEach((page, cluster) => nodes.push({ position: [...page.position], color: [3, 6].includes(cluster) ? ivory : coral, size: cluster === 6 ? 36 : cluster === 3 ? 30 : 23, cluster, seed: random(cluster), kind: [3, 6].includes(cluster) ? 3 : 0 }));
@@ -222,13 +224,29 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     const stageLabel = phase === 'READER' ? 'RAW / LOCKED' : phase === 'LIBRARIAN' ? 'PATCH' : phase === 'ANSWER' ? 'SAVED' : conflicts ? 'CONFLICT' : 'AUDIT';
     const command = phase === 'READER' ? '> reader ingest raw/source-042.pdf --read-only' : phase === 'LIBRARIAN' ? '> librarian patch wiki/ --source 042' : phase === 'ANSWER' ? '> librarian answer --save wiki/answer-013.md' : conflicts ? '> checker flag routines.md --notify @you' : '> checker audit --nightly --source-links';
     const nodeCount = 2788 + Math.floor(committed / 12 * 418);
-    return { time, paused, speed, fps: Math.round(fps), phase, stageLabel, activePage, workPage, inspecting: selected !== undefined, committed,
+    return { time, paused, speed, fps: Math.round(fps), phase, stageLabel, activePage, workPage, inspecting: selected !== undefined, inspectedRecord: focus?.record ?? null, committed,
       nodeCount, linkCount: activeEdges(nodeCount),
       scanned: phase === 'CHECKER' ? Math.min(128, Math.floor((t - 14.4) / 8 * 128)) : 0, conflicts,
-      command, claim: conflicts && activePage === 3 ? 'DAILY ≠ WEEKLY · verify source' : phase === 'ANSWER' && selected === undefined ? 'Review runs daily at 02:00' : pages[activePage]!.claim,
+      command, claim: focus?.record === 'raw/source-042.pdf' ? 'Keep every original untouched' : focus?.record === 'raw/source-017.pdf' ? 'Review runs weekly on Monday' : conflicts && activePage === 3 ? 'DAILY ≠ WEEKLY · verify source' : phase === 'ANSWER' && selected === undefined ? 'Review runs daily at 02:00' : pages[activePage]!.claim,
       azimuth: pose.yaw * 180 / Math.PI, zoom: pose.zoom };
   }
   function camera() {
+    if (focus) {
+      // Freeze the tour orientation and track the picked XYZ anchor while the workflow continues.
+      pose = { yaw: focus.yaw + yaw, pitch: focus.pitch + pitch, x: 0, y: 0, zoom: 2.45 * zoom };
+      const anchor = project(focus.world, focus.cluster);
+      const scale = Math.min(width / 4.25, height / 3.95) * pose.zoom;
+      pose.x = (width * (width < 560 ? .5 : .42) - anchor.x) / scale;
+      pose.y = (height * (width < 560 ? .28 : .52) - anchor.y) / scale;
+      if (transition) {
+        const blend = ease(transition.elapsed / .65);
+        const from = transition.from;
+        pose = { yaw: from.yaw + (pose.yaw - from.yaw) * blend, pitch: from.pitch + (pose.pitch - from.pitch) * blend,
+          x: from.x + (pose.x - from.x) * blend, y: from.y + (pose.y - from.y) * blend, zoom: from.zoom + (pose.zoom - from.zoom) * blend };
+        if (blend === 1) transition = undefined;
+      }
+      return;
+    }
     const t = time % 24;
     const keyframes = [
       [-.16, -.05, 0, 0, 1], [.14, .03, -.03, .02, 1.13], [-.26, -.04, -.14, .50, 1.30],
@@ -266,11 +284,11 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
       const p = project(node.position, node.cluster);
       labels.push({ id: `detail-${i}`, text: `${pages[node.cluster]!.name.slice(0, 3)}:${String(1040 + i * 29)}`, x: p.x + 4, y: p.y - 3, scale: clamp(p.scale, .65, 1.1), active: false, visible: p.x > 20 && p.x < width - 35 && p.y > 20 && p.y < height - 25, kind: 'detail' });
     }
-    if (state.conflicts) {
+    if (state.conflicts || focus?.record === 'raw/source-017.pdf') {
       const p = project([.74, -.76, .75]);
       labels.push({ id: 'source-017', text: '017 / WEEKLY', x: p.x + 10, y: p.y + 5, scale: clamp(p.scale, .7, 1.2), active: true, visible: true, kind: 'source' });
     }
-    const p = state.phase === 'READER' && !state.inspecting ? project(source) : project(pages[state.activePage]!.position, state.activePage);
+    const p = focus ? project(focus.world, focus.cluster) : state.phase === 'READER' && !state.inspecting ? project(source) : project(pages[state.activePage]!.position, state.activePage);
     options.onOverlay?.({ labels, anchor: { x: p.x, y: p.y, visible: p.x > -60 && p.x < width + 60 && p.y > -50 && p.y < height + 50 } });
   }
   function activeEdges(count: number) {
@@ -299,10 +317,10 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
       const p = from.map((v, axis) => v + (active.position[axis]! - v) * t) as Vec3;
       transient.push(...pack({ position: p, color: state.conflicts ? gold : [.95, .74, .63], size: 2.4, cluster: -1, seed: i, kind: 0 }));
     }
-    if (state.conflicts) {
+    if (state.conflicts || focus?.record === 'raw/source-017.pdf') {
       const otherSource: Vec3 = [.74, -.76, .75];
       transient.push(...pack({ position: otherSource, color: gold, size: 22, cluster: -1, seed: 1, kind: 0 }));
-      for (const origin of [source, otherSource]) {
+      for (const origin of state.conflicts ? [source, otherSource] : []) {
         traceLines.push(...pack({ position: origin, color: gold, size: .5, cluster: -1, seed: 0, kind: 1 }), ...pack({ ...active, color: gold, size: .5, kind: 1 }));
         const t = time * .8 % 1;
         transient.push(...pack({ position: origin.map((v, axis) => v + (active.position[axis]! - v) * t) as Vec3, color: gold, size: 4, cluster: -1, seed: 0, kind: 0 }));
@@ -364,7 +382,7 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     for (let i = 0; i < transient.length; i += stride) {
       const p = project([transient[i]!, transient[i + 1]!, transient[i + 2]!], transient[i + 7]!);
       const size = transient[i + 6]! * p.scale;
-      ctx.globalAlpha = .85; ctx.drawImage(sphereSprites[state.conflicts ? 2 : 1]!, p.x - size / 2, p.y - size / 2, size, size);
+      ctx.globalAlpha = .85; ctx.drawImage(sphereSprites[state.conflicts || transient[i + 6]! >= 18 ? 2 : 1]!, p.x - size / 2, p.y - size / 2, size, size);
     }
     ctx.globalAlpha = 1;
   }
@@ -376,24 +394,56 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     if (fallbackCanvas) { fallbackCanvas.width = canvas.width; fallbackCanvas.height = canvas.height; }
     render();
   }
-  function schedule() { if (!disposed && !paused && !raf) raf = requestAnimationFrame(frame); }
+  function schedule() { if (!disposed && (!paused || transition) && !raf) raf = requestAnimationFrame(frame); }
   function frame(now: number) {
     raf = 0; if (disposed) return;
     const dt = Math.max(0, (now - lastTime) / 1000); lastTime = now;
     if (!paused) { time += dt * speed; if (dt > .003 && dt < .25) fps += (1 / dt - fps) * .04; }
+    const moving = !!transition;
+    if (transition) transition.elapsed += dt;
     frameCount++; render();
-    if (time - lastNotify >= .08) { notify(); lastNotify = time; }
+    if (moving || time - lastNotify >= .08) { notify(); lastNotify = time; }
     schedule();
   }
-  function updateView() { render(); notify(); }
+  function updateView() {
+    render(); notify();
+    if (paused && !transition && raf) { cancelAnimationFrame(raf); raf = 0; }
+    schedule();
+  }
+  function focusOn(index: number, world = pages[index]!.position, cluster = index, record: string | null = null) {
+    const from = { ...pose };
+    selected = index;
+    focus = { world: [...world], cluster, yaw: pose.yaw - yaw, pitch: pose.pitch - pitch, record };
+    zoom = 1;
+    transition = matchMedia('(prefers-reduced-motion: reduce)').matches ? undefined : { from, elapsed: 0 };
+    lastTime = performance.now(); updateView();
+  }
+  function resetView() {
+    yaw = pitch = 0; zoom = 1; selected = undefined; focus = transition = undefined;
+    updateView();
+  }
   canvas.addEventListener('pointerdown', event => { if (event.button !== 0) return; pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY }; canvas.setPointerCapture(event.pointerId); }, { signal: abort.signal });
   canvas.addEventListener('pointermove', event => { if (!pointer || pointer.id !== event.pointerId) return; yaw += (event.clientX - pointer.x) * .005; pitch = clamp(pitch + (event.clientY - pointer.y) * .003, -.6, .6); pointer.x = event.clientX; pointer.y = event.clientY; updateView(); }, { signal: abort.signal });
   canvas.addEventListener('pointerup', event => {
     if (!pointer || pointer.id !== event.pointerId) return;
     if (Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) < 5) {
-      const rect = canvas.getBoundingClientRect(); let closest = -1, distance = 32;
-      pages.forEach((page, i) => { const p = project(page.position, i); const d = Math.hypot(p.x - event.clientX + rect.left, p.y - event.clientY + rect.top); if (d < distance) { closest = i; distance = d; } });
-      if (closest >= 0) selected = closest;
+      const rect = canvas.getBoundingClientRect();
+      let closest = -1, depth = -Infinity;
+      const count = snapshot().nodeCount;
+      for (let i = 0; i < count; i++) {
+        const node = nodes[i]!; const p = project(node.position, node.cluster);
+        const distance = Math.hypot(p.x - event.clientX + rect.left, p.y - event.clientY + rect.top);
+        if (distance <= Math.max(5, node.size * p.scale / 2 + 2) && p.depth > depth) { closest = i; depth = p.depth; }
+      }
+      const otherSource: Vec3 = [.74, -.76, .75];
+      const other = project(otherSource);
+      if ((snapshot().conflicts || focus?.record === 'raw/source-017.pdf') && Math.hypot(other.x - event.clientX + rect.left, other.y - event.clientY + rect.top) < 11 * other.scale + 2 && other.depth > depth) {
+        focusOn(3, otherSource, -1, 'raw/source-017.pdf');
+      } else if (closest >= 0) {
+        const node = nodes[closest]!;
+        const record = node.cluster < 0 ? 'raw/source-042.pdf' : closest < 12 ? null : `${pages[node.cluster]!.name.slice(0, 3)}:${String(closest).padStart(4, '0')}`;
+        focusOn(node.cluster < 0 ? 7 : node.cluster, node.position, node.cluster, record);
+      }
     }
     pointer = undefined; if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId); updateView();
   }, { signal: abort.signal });
@@ -405,7 +455,7 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
     if (event.key === 'ArrowLeft') yaw -= .10; if (event.key === 'ArrowRight') yaw += .10;
     if (event.key === 'ArrowUp') pitch = clamp(pitch - .08, -.6, .6); if (event.key === 'ArrowDown') pitch = clamp(pitch + .08, -.6, .6);
     if (event.key === '+' || event.key === '=') zoom = clamp(zoom * 1.1, .65, 2); if (event.key === '-') zoom = clamp(zoom / 1.1, .65, 2);
-    if (event.key === '0') { yaw = pitch = 0; zoom = 1; }
+    if (event.key === '0') { resetView(); return; }
     updateView();
   }, { signal: abort.signal });
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); releaseGpu(); fallback(); resize(); notify(); }, { signal: abort.signal });
@@ -413,15 +463,15 @@ export function mountKnowledgeEngine(canvas: HTMLCanvasElement, options: Knowled
   const observer = new ResizeObserver(resize); observer.observe(canvas);
   resize(); notify(); schedule();
   return {
-    setPaused(value) { if (disposed) return; paused = value; lastTime = performance.now(); if (paused && raf) { cancelAnimationFrame(raf); raf = 0; } render(); notify(); schedule(); },
+    setPaused(value) { if (disposed) return; paused = value; lastTime = performance.now(); if (paused && !transition && raf) { cancelAnimationFrame(raf); raf = 0; } render(); notify(); schedule(); },
     setSpeed(value) { if (disposed || !Number.isFinite(value)) return; speed = clamp(value, .25, 3); notify(); },
-    restart() { if (disposed) return; time = 0; lastNotify = -1; selected = undefined; lastTime = performance.now(); render(); notify(); schedule(); },
-    resetView() { if (disposed) return; yaw = pitch = 0; zoom = 1; selected = undefined; updateView(); },
-    selectPage(index) { if (disposed || !Number.isInteger(index) || index < 0 || index >= pages.length) return; selected = index; updateView(); },
+    restart() { if (disposed) return; time = 0; lastNotify = -1; selected = undefined; focus = transition = undefined; lastTime = performance.now(); updateView(); },
+    resetView() { if (!disposed) resetView(); },
+    selectPage(index) { if (disposed || !Number.isInteger(index) || index < 0 || index >= pages.length) return; focusOn(index); },
     getSnapshot: snapshot,
     debug() {
       const probes: Vec3[] = [[.3, .3, -.9], [.3, .3, .9], source, pages[6]!.position];
-      return { renderer: gpuReady ? 'webgl' : 'canvas2d', nodeCount: snapshot().nodeCount, linkCount: activeEdges(snapshot().nodeCount), depthRange: { min: Math.min(...nodes.map(n => n.position[2])), max: Math.max(...nodes.map(n => n.position[2])) }, rotation: { yaw, pitch, zoom }, disposed, activeFrame: raf !== 0, frameCount,
+      return { renderer: gpuReady ? 'webgl' : 'canvas2d', nodeCount: snapshot().nodeCount, linkCount: activeEdges(snapshot().nodeCount), depthRange: { min: Math.min(...nodes.map(n => n.position[2])), max: Math.max(...nodes.map(n => n.position[2])) }, rotation: { yaw, pitch, zoom }, focus: focus ? { world: [...focus.world] as Vec3, screen: [project(focus.world, focus.cluster).x, project(focus.world, focus.cluster).y] as [number, number], progress: transition ? clamp(transition.elapsed / .65, 0, 1) : 1 } : null, disposed, activeFrame: raf !== 0, frameCount,
         probes: probes.map(world => { const p = project(world); return { world: [...world] as Vec3, screen: [p.x, p.y] as [number, number], depth: p.depth }; }) };
     },
     dispose() { if (disposed) return; disposed = true; if (raf) cancelAnimationFrame(raf); raf = 0; observer.disconnect(); abort.abort(); releaseGpu(); fallbackCanvas?.remove(); canvas.style.opacity = originalOpacity; },
