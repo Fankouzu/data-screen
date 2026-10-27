@@ -9,6 +9,8 @@ declare global { interface Window { jevEngine?: JevController } }
 const root = ref<HTMLElement>();
 const canvas = ref<HTMLCanvasElement>();
 const flameViewport = ref<HTMLElement>();
+const flameElements = ref<HTMLElement[]>([]);
+const flameCursor = ref<HTMLElement>();
 const flameWidth = ref(1920);
 let flameObserver: ResizeObserver | undefined;
 const snapshot = ref<JevSnapshot>({ ...initialJevSnapshot });
@@ -24,8 +26,16 @@ const flameRows = Array.from({ length: 3 }, (_, row) => Array.from({ length: 26 
 }));
 const flameTracks = computed(() => flameRows.map((items, row) => {
   const width = items.reduce((total, item) => total + item.width + 3, 0);
-  return { items, width, copies: Math.ceil(flameWidth.value / width) + 1, offset: -(snapshot.value.time * 23 * (row === 0 ? .5 : 1 + row * .1) % width) };
+  return { items, width, copies: Math.ceil(flameWidth.value / width) + 1, velocity: 120 * (row === 0 ? .5 : 1 + row * .1) };
 }));
+// Only the three transforms update per frame; telemetry keeps its lower update rate.
+function renderFlame(time: number) {
+  flameElements.value.forEach((element, row) => {
+    const track = flameTracks.value[row];
+    if (track) element.style.transform = `translate3d(${-((time * track.velocity) % track.width)}px,0,0)`;
+  });
+  if (flameCursor.value) flameCursor.value.style.transform = `translate3d(${(24 + Math.sin(time * .35) * 15) / 100 * flameWidth.value}px,0,0)`;
+}
 const sparklines = computed(() => [0, 1, 2].map(channel => Array.from({ length: 110 }, (_, i) => {
   const t = snapshot.value.time - (109 - i) * .16;
   const pulse = Math.pow(Math.max(0, Math.sin(t * (channel === 2 ? 5.4 : 3.5))), channel === 2 ? 8 : 12);
@@ -84,7 +94,7 @@ onMounted(() => {
   flameObserver = new ResizeObserver(entries => { flameWidth.value = entries[0]?.contentRect.width ?? 1920; });
   if (flameViewport.value) flameObserver.observe(flameViewport.value);
   preference = matchMedia('(prefers-reduced-motion: reduce)');
-  controller = mountJevEngine(canvas.value, { initialPaused: preference.matches, onUpdate: value => { snapshot.value = value; } });
+  controller = mountJevEngine(canvas.value, { initialPaused: preference.matches, onFrame: renderFlame, onUpdate: value => { snapshot.value = value; } });
   window.jevEngine = controller;
   preference.addEventListener('change', motionChanged);
 });
@@ -101,7 +111,7 @@ onBeforeUnmount(() => {
     <header class="jev-masthead"><h1><i></i>JEV ENGINEERING / @ASTERI_ETH</h1><span>MODEL jev-1.13.0 · PINS 2 600 · DECISIONS {{ fmt(snapshot.decisions) }} · 2026-09-22</span></header>
     <section class="jev-profile" aria-label="代理任务火焰图">
       <div class="jev-section-heading"><h2>AGENT STEP PROFILE · 2 048 SAMPLES · FLAME · DECIDE vs GENERATE</h2><b>decide/gen {{ snapshot.confidence.toFixed(1) }} %</b></div>
-      <div ref="flameViewport" class="jev-flame-window"><div v-for="(track,r) in flameTracks" :key="r" class="jev-flame-row" :style="{transform:`translateX(${track.offset}px)`}"><div v-for="copy in track.copies" :key="copy" class="jev-flame-copy" :style="{width:`${track.width}px`}"><span v-for="(item,i) in track.items" :key="i" :style="{width:`${item.width}px`,background:item.color}">{{ item.text }}</span></div></div><div class="jev-flame-cursor" :style="{left:`${24 + Math.sin(snapshot.time*.35)*15}%`}"></div></div>
+      <div ref="flameViewport" class="jev-flame-window"><div v-for="(track,r) in flameTracks" :key="r" ref="flameElements" class="jev-flame-row"><div v-for="copy in track.copies" :key="copy" class="jev-flame-copy" :style="{width:`${track.width}px`}"><span v-for="(item,i) in track.items" :key="i" :style="{width:`${item.width}px`,background:item.color}">{{ item.text }}</span></div></div><div ref="flameCursor" class="jev-flame-cursor" style="left:0"></div></div>
     </section>
     <div class="jev-router-heading"><span>ROUTER AUTOROUTE · RE-ROUTES {{ (snapshot.load*.8).toFixed(1) }}/S · WAVE {{ Math.floor(snapshot.time*4)%360 }}° · GATED {{ Math.round(snapshot.gated/3) }}</span><span>YAW {{ snapshot.yaw.toFixed(1) }}° · PITCH {{ snapshot.pitch.toFixed(1) }}° · R 110–420 · STRANDS 2 600</span></div>
     <div class="jev-workspace">

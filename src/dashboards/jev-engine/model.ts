@@ -17,7 +17,7 @@ export interface JevController {
   restart(): void; resetView(): void; dispose(): void;
   getSnapshot(): JevSnapshot; debug(): JevDiagnostics;
 }
-export interface JevOptions { initialPaused?: boolean; onUpdate(snapshot: JevSnapshot): void }
+export interface JevOptions { initialPaused?: boolean; onUpdate(snapshot: JevSnapshot): void; onFrame?(time: number): void }
 export const initialJevSnapshot: JevSnapshot = {
   time: 0, paused: false, speed: 1, fps: 60, decisions: 9786, load: 398.5,
   gated: 127, escalations: 5, confidence: 73.9, tokens: 1.93, latency: 226,

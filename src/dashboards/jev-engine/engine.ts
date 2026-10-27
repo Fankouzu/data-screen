@@ -109,6 +109,7 @@ export function mountJevEngine(canvas: HTMLCanvasElement, options: JevOptions): 
     }
     probes = samples; depthRange = { min: minDepth, max: maxDepth };
     callout(t, rotation);
+    options.onFrame?.(state.time);
   }
   function callout(t: number, rotation: number) {
     const cycle = Math.floor(t / 4.8), progress = (t % 4.8) / 4.8;

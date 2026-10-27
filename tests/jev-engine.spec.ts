@@ -209,3 +209,34 @@ test('Flame tracks continuously cover a wide viewport after long runs and across
   });
   expect(result).toEqual([]);
 });
+
+test('Flame tracks move on every frame at a faster pace and respect pause, speed and replay', async ({ page }) => {
+  await controlFrames(page); await open(page);
+  const result = await page.evaluate(() => {
+    const c = window.jevEngine!;
+    const positions = () => [...document.querySelectorAll('.jev-flame-row')].map(row => new DOMMatrixReadOnly(getComputedStyle(row).transform).m41);
+    c.restart(); c.setSpeed(1); c.setPaused(false);
+    const start = performance.now(); window.__stepJev!(start);
+    const samples = [positions()];
+    for (let frame = 1; frame <= 12; frame++) {
+      window.__stepJev!(start + frame * 1000 / 60);
+      samples.push(positions());
+    }
+    c.setPaused(true); const paused = positions(); window.__stepJev!(start + 1500);
+    const frozen = positions(); c.restart(); const replay = positions();
+    c.setSpeed(2); c.setPaused(false);
+    const fastStart = performance.now(); window.__stepJev!(fastStart); const fastBefore = positions(); window.__stepJev!(fastStart + 200);
+    const fastAfter = positions(); c.setPaused(true);
+    return { samples, paused, frozen, replay, fastBefore, fastAfter };
+  });
+  for (let row = 0; row < 3; row++) {
+    const steps = result.samples.slice(1).map((sample, i) => result.samples[i]![row]! - sample[row]!);
+    expect(steps.every(step => step > .5), `row ${row} must advance on every 60Hz frame`).toBe(true);
+    expect(Math.max(...steps) - Math.min(...steps)).toBeLessThan(.02);
+    const distance = result.samples[0]![row]! - result.samples[12]![row]!;
+    expect(distance).toBeGreaterThan([10, 24, 26][row]!);
+    expect((result.fastBefore[row]! - result.fastAfter[row]!) / distance).toBeCloseTo(2, 2);
+  }
+  expect(result.frozen).toEqual(result.paused);
+  expect(result.replay.every(value => Math.abs(value) < .001)).toBe(true);
+});
