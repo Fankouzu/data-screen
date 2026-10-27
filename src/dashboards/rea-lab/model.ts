@@ -14,6 +14,7 @@ export interface ReaSnapshot {
   flagRate: number; crossings: number; inFlight: number; zoom: number; azimuth: number;
 }
 export interface ReaDiagnostics {
+  spectrumTips: number[][]; ribbonCaps: { top: number[]; bottom: number[] }[];
   renderer: 'canvas2d'; disposed: boolean; activeFrame: boolean; frameCount: number;
   nodeCount: number; linkCount: number; depthRange: { min: number; max: number };
   rotation: { yaw: number; pitch: number; zoom: number };

@@ -216,3 +216,38 @@ test('Zooming during a paused reset continues from the visible camera without ju
   expect(interrupted.time).toBe(initial.time);
   expect(await page.evaluate(() => window.reaLab!.debug().activeFrame)).toBe(false);
 });
+
+test('Opening overview keeps both fan end caps outside desktop, portrait and mobile scenes', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const viewport of [{ width: 1600, height: 1000 }, { width: 720, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await open(page);
+    const height = await page.locator('.rea-scene').evaluate(element => element.clientHeight);
+    const caps = await page.evaluate(() => window.reaLab!.debug().ribbonCaps);
+    for (const cap of caps) {
+      expect(Math.max(...cap.top)).toBeLessThan(0);
+      expect(Math.min(...cap.bottom)).toBeGreaterThan(height);
+    }
+  }
+});
+
+test('Central spectra visibly reshape within 120 milliseconds and freeze on pause', async ({ page }) => {
+  await page.setViewportSize({ width: 720, height: 900 });
+  await controlFrames(page);
+  await open(page);
+  const result = await page.evaluate(() => {
+    const c = window.reaLab!; c.restart(); c.setPaused(false);
+    const start = performance.now(); window.__stepRea!(start);
+    const before = c.debug().spectrumTips;
+    window.__stepRea!(start + 120);
+    const after = c.debug().spectrumTips;
+    c.setPaused(true); window.__stepRea!(start + 1000);
+    return { before, after, paused: c.debug().spectrumTips, phase: c.getSnapshot().phase };
+  });
+  for (let side = 0; side < 2; side++) {
+    const shifts = result.after[side]!.map((x, i) => Math.abs(x - result.before[side]![i]!));
+    expect(shifts.reduce((sum, shift) => sum + shift, 0) / shifts.length).toBeGreaterThan(7);
+  }
+  expect(result.paused).toEqual(result.after);
+  expect(result.phase).toBe('LOADING');
+});

@@ -10,18 +10,18 @@ interface Point { x: number; y: number; scale: number; depth: number }
 interface Particle { base: Vec3; side: number; color: number; radius: number; seed: number }
 interface Pose { x: number; y: number; zoom: number; yaw: number; pitch: number }
 const keys: (Pose & { t: number })[] = [
-  { t: 0, x: 0, y: 0, zoom: 1, yaw: -.05, pitch: .025 },
-  { t: 2, x: 0, y: 0, zoom: 1, yaw: -.05, pitch: .025 },
+  { t: 0, x: 0, y: 0, zoom: 1.38, yaw: -.05, pitch: .025 },
+  { t: 2, x: 0, y: 0, zoom: 1.38, yaw: -.05, pitch: .025 },
   { t: 3.3, x: -1.25, y: 0, zoom: 1.65, yaw: .11, pitch: -.02 },
   { t: 5.2, x: -1.25, y: 0, zoom: 1.65, yaw: .11, pitch: -.02 },
   { t: 6.6, x: 1.25, y: 0, zoom: 1.65, yaw: -.10, pitch: .015 },
   { t: 8.2, x: 1.25, y: 0, zoom: 1.65, yaw: -.10, pitch: .015 },
-  { t: 9.7, x: 0, y: 0, zoom: 1.07, yaw: .035, pitch: .015 },
-  { t: 11.5, x: 0, y: 0, zoom: 1.07, yaw: .035, pitch: .015 },
-  { t: 12.7, x: 0, y: 0, zoom: 1.20, yaw: -.015, pitch: .015 },
-  { t: 14.6, x: 0, y: .22, zoom: .89, yaw: .015, pitch: 0 },
-  { t: 16.8, x: 0, y: .22, zoom: .89, yaw: .015, pitch: 0 },
-  { t: 18, x: 0, y: 0, zoom: 1, yaw: -.05, pitch: .025 },
+  { t: 9.7, x: 0, y: 0, zoom: 1.38, yaw: .035, pitch: .015 },
+  { t: 11.5, x: 0, y: 0, zoom: 1.38, yaw: .035, pitch: .015 },
+  { t: 12.7, x: 0, y: 0, zoom: 1.46, yaw: -.015, pitch: .015 },
+  { t: 14.6, x: 0, y: .22, zoom: 1.28, yaw: .015, pitch: 0 },
+  { t: 16.8, x: 0, y: .22, zoom: 1.28, yaw: .015, pitch: 0 },
+  { t: 18, x: 0, y: 0, zoom: 1.38, yaw: -.05, pitch: .025 },
 ];
 
 /** Two spatial networks share a clock: disorder resolves into aligned instruction streams. */
@@ -95,7 +95,8 @@ export function mountReaLab(canvas: HTMLCanvasElement, options: ReaOptions): Rea
     const rx = x * cy + wz * sy, rz = wz * cy - x * sy;
     const ry = wy * cp - rz * sp, depth = wy * sp + rz * cp;
     const perspective = 6 / Math.max(2.5, 6 - depth);
-    const scale = Math.min(width / 4.05, height / 3.6) * pose.zoom;
+    // Cover the scene vertically so ribbon end caps stay outside the overview.
+    const scale = height / 3.6 * pose.zoom;
     return { x: width * .51 + (rx * perspective - pose.x * stretch) * scale, y: height * .44 + (ry * perspective - pose.y) * scale, scale: scale / 180 * perspective, depth };
   }
   function bandX(side: number, y: number) { return (side ? 1 : -1) * (.67 + .24 * y * y); }
@@ -156,17 +157,20 @@ export function mountReaLab(canvas: HTMLCanvasElement, options: ReaOptions): Rea
     }
     ctx.globalAlpha = 1;
   }
+  const spectrumSamples: number[][] = [[], []];
   function spectrum(side: number, state: ReaSnapshot) {
+    spectrumSamples[side]!.length = 0;
     const sign = side ? 1 : -1, count = 300, aligned = state.sync / 100;
-    const phase = time * .23 + side * (1 - aligned) * 1.7;
+    const phase = time * 4.6 + side * (1 - aligned) * 1.7;
     const bars: { a: Point; b: Point; color: number; radius: number; tip: boolean }[] = [];
     for (let i = 0; i < count; i++) {
       const y = (i / (count - 1) - .5) * 3.12;
       const envelope = Math.pow(Math.sin(i / (count - 1) * Math.PI), .5);
-      const wave = .25 + .20 * Math.sin(y * 5.2 + phase) + .12 * Math.sin(y * 12.6 - phase * .7) + .035 * Math.sin(i * 2.7 + Math.floor(time * 7) * .3);
+      const wave = .25 + .20 * Math.sin(y * 5.2 + phase) + .12 * Math.sin(y * 12.6 - phase * .7) + .035 * Math.sin(i * 2.7 + Math.floor(time * 18) * .3);
       const length = (.08 + Math.max(.03, wave) * envelope) * (1 + aligned * .28);
       const a = project([bandX(side, y) - sign * .025, y, 0]);
       const b = project([bandX(side, y) - sign * length, y, Math.sin(i * .2) * .035]);
+      if (i % 15 === 0) spectrumSamples[side]!.push(b.x);
       bars.push({ a, b, color: Math.floor((Math.sin(y * 2.2 + phase * .2) * .5 + .5) * 5), radius: (9 + noise(i * 7) * 13) * b.scale, tip: i % 5 === 0 });
     }
     ctx.strokeStyle = side ? '#162139' : '#3e2413'; ctx.globalAlpha = .82;
@@ -328,7 +332,11 @@ export function mountReaLab(canvas: HTMLCanvasElement, options: ReaOptions): Rea
     getSnapshot: snapshot,
     debug() {
       const worlds: Vec3[] = [[-.9, -.3, -.7], [-.9, -.3, .7], [.9, .3, -.7], [.9, .3, .7]];
-      return { renderer: 'canvas2d', disposed, activeFrame: raf !== 0, frameCount, nodeCount: particles.length, linkCount: links.length + perSide * 2,
+      return { renderer: 'canvas2d', spectrumTips: spectrumSamples.map(side => [...side]),
+        ribbonCaps: [0, 1].map(side => ({
+          top: [0, .25].map(offset => project([bandX(side, -1.60) + (side ? 1 : -1) * offset, -1.60, .015]).y),
+          bottom: [0, .25].map(offset => project([bandX(side, 1.60) + (side ? 1 : -1) * offset, 1.60, .015]).y),
+        })), disposed, activeFrame: raf !== 0, frameCount, nodeCount: particles.length, linkCount: links.length + perSide * 2,
         depthRange: { min: -.7, max: .7 }, rotation: { yaw, pitch, zoom }, camera: { x: pose.x, y: pose.y, zoom: pose.zoom },
         probes: worlds.map(world => { const p = project(world); return { world, screen: [p.x, p.y] as [number, number], depth: p.depth }; }) };
     },
