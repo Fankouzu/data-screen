@@ -251,3 +251,31 @@ test('Central spectra visibly reshape within 120 milliseconds and freeze on paus
   expect(result.paused).toEqual(result.after);
   expect(result.phase).toBe('LOADING');
 });
+
+test('Audio-style spectrum bands attack and release independently instead of traveling as one wave', async ({ page }) => {
+  await page.setViewportSize({ width: 720, height: 900 });
+  await controlFrames(page);
+  await open(page);
+  const series = await page.evaluate(() => {
+    const c = window.reaLab!; c.restart(); c.setPaused(false);
+    const start = performance.now(); window.__stepRea!(start);
+    return Array.from({ length: 40 }, (_, i) => {
+      window.__stepRea!(start + i * 30);
+      return c.debug().spectrumTips;
+    });
+  });
+  let independent = 0, moving = 0;
+  for (let t = 1; t < series.length; t++) {
+    for (let side = 0; side < 2; side++) {
+      const shifts = series[t]![side]!.map((x, i) => x - series[t - 1]![side]![i]!);
+      for (let i = 2; i < shifts.length - 2; i++) {
+        if (Math.abs(shifts[i]!) > 1 && Math.abs(shifts[i + 1]!) > 1) {
+          moving++;
+          if (shifts[i]! * shifts[i + 1]! < 0) independent++;
+        }
+      }
+    }
+  }
+  expect(moving).toBeGreaterThan(300);
+  expect(independent / moving).toBeGreaterThan(.35);
+});

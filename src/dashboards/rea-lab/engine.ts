@@ -4,6 +4,18 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 const noise = (seed: number) => { const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return value - Math.floor(value); };
 const ease = (value: number) => { const t = clamp(value, 0, 1); return t * t * (3 - 2 * t); };
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+// Fixed frequency bins with fast attack and slower release, never a traveling wave.
+function audioLevel(band: number, time: number, channel: number) {
+  const clock = time * 9 + noise(band * 19 + channel * 113) * .8;
+  const step = Math.floor(clock), fraction = clock - step;
+  const peak = (event: number) => .10 + Math.pow(noise(band * 29 + event * 17 + channel * 211), 1.5) * .55;
+  const attack = ease(fraction / .16);
+  const release = 1 - .68 * ease((fraction - .16) / .84);
+  const pulse = mix(peak(step - 1) * .32, peak(step), attack) * release;
+  const beatAge = (time + channel * .06) % .42;
+  const beat = Math.min(beatAge / .012, 1) * Math.exp(-beatAge * 16);
+  return clamp(.045 + pulse + beat * (.08 + .18 * noise(band * 7)), .06, .68);
+}
 const colors = [['#57401c', '#885218', '#a94725', '#b96b3d', '#a72e42', '#bb1551'], ['#164e45', '#007e77', '#116f94', '#284f8f', '#373377', '#6744a1']];
 const codes = [['m0-31 read', 'r12 xor', 'm1-04 draft', 'b0-52 cmp', 'm0-07 call', 'a3-11 push', 'm1-16 ret', 'r8 mov', 'm0-18 graft'], ['ck-11 pass', 'ck-03 pass', 'ck-02 pass', 'v12 08:1', 'ck-16 pass', 'd-0412 ok', 'ck-07 bounce', 'c8-21 pass', 'r9 return']];
 interface Point { x: number; y: number; scale: number; depth: number }
@@ -161,17 +173,21 @@ export function mountReaLab(canvas: HTMLCanvasElement, options: ReaOptions): Rea
   function spectrum(side: number, state: ReaSnapshot) {
     spectrumSamples[side]!.length = 0;
     const sign = side ? 1 : -1, count = 300, aligned = state.sync / 100;
-    const phase = time * 4.6 + side * (1 - aligned) * 1.7;
+    const levels = Array.from({ length: 50 }, (_, band) => {
+      const common = audioLevel(band, time, 0);
+      return side ? mix(audioLevel(band, time, 1), common, aligned) : common;
+    });
     const bars: { a: Point; b: Point; color: number; radius: number; tip: boolean }[] = [];
     for (let i = 0; i < count; i++) {
       const y = (i / (count - 1) - .5) * 3.12;
-      const envelope = Math.pow(Math.sin(i / (count - 1) * Math.PI), .5);
-      const wave = .25 + .20 * Math.sin(y * 5.2 + phase) + .12 * Math.sin(y * 12.6 - phase * .7) + .035 * Math.sin(i * 2.7 + Math.floor(time * 18) * .3);
-      const length = (.08 + Math.max(.03, wave) * envelope) * (1 + aligned * .28);
+      const envelope = .55 + .45 * Math.sqrt(Math.sin(i / (count - 1) * Math.PI));
+      const band = Math.floor(i / 6);
+      const detail = .88 + noise(i * 31) * .18;
+      const length = levels[band]! * envelope * detail;
       const a = project([bandX(side, y) - sign * .025, y, 0]);
       const b = project([bandX(side, y) - sign * length, y, Math.sin(i * .2) * .035]);
       if (i % 15 === 0) spectrumSamples[side]!.push(b.x);
-      bars.push({ a, b, color: Math.floor((Math.sin(y * 2.2 + phase * .2) * .5 + .5) * 5), radius: (9 + noise(i * 7) * 13) * b.scale, tip: i % 5 === 0 });
+      bars.push({ a, b, color: Math.min(5, Math.floor(i / count * 6)), radius: (9 + noise(i * 7) * 13) * b.scale, tip: i % 5 === 0 });
     }
     ctx.strokeStyle = side ? '#162139' : '#3e2413'; ctx.globalAlpha = .82;
     ctx.lineWidth = Math.max(.85, .95 * project([0, 0, 0]).scale); ctx.beginPath();
