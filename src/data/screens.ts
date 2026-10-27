@@ -5,6 +5,7 @@ import vortexDeskPreview from '../assets/previews/vortex-desk.webp'
 import signalLoomPreview from '../assets/previews/signal-loom.webp'
 import knowledgeEnginePreview from '../assets/previews/knowledge-engine.webp'
 import reaLabPreview from '../assets/previews/rea-lab.webp'
+import jevEnginePreview from '../assets/previews/jev-engine.webp'
 
 export interface ScreenDefinition {
   id: string
@@ -135,11 +136,28 @@ export const screens: ScreenDefinition[] = [
     url: '/screens/rea-lab',
     preview: reaLabPreview,
     date: '2026-10-26',
-    featured: true,
+    featured: false,
     highlights: [
       { value: '64 + 16', label: '协作代理' },
       { value: '05', label: '解析阶段' },
       { value: '1,536', label: '提升指令' },
+    ],
+  },
+  {
+    id: 'jev-engine',
+    title: 'Jev Engine',
+    subtitle: '环形决策路由 · 三维针束网络',
+    description: '穿过密集彩色针束组成的立体环形网络，跟随白色扫描波与节点事件观察决策路由。任务火焰图、置信度分布、令牌流量与成本监测同步变化。',
+    category: '路由可视化',
+    tags: ['3D 环形网络', '针束扫描', '决策路由'],
+    url: '/screens/jev-engine',
+    preview: jevEnginePreview,
+    date: '2026-10-27',
+    featured: true,
+    highlights: [
+      { value: '2,600', label: '空间针束' },
+      { value: '48', label: '置信分箱' },
+      { value: '03', label: '负载通道' },
     ],
   },
 ]

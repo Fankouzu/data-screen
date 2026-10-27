@@ -137,7 +137,7 @@ test('Rea Lab cancels its single render loop on every SPA exit', async ({ page }
     });
     expect(active).toEqual({ frames: 1, rendered: 1 });
     await page.getByRole('link', { name: '返回大屏索引', exact: true }).press('Enter');
-    await expect(page.locator('#screen-grid .open-screen')).toHaveCount(7);
+    await expect(page.locator('#screen-grid .open-screen')).toHaveCount(8);
     const disposed = await page.evaluate(() => ({ controller: typeof window.reaLab, frames: window.__reaFrames!.size, disposed: window.__retiredRea!.debug().disposed }));
     expect(disposed).toEqual({ controller: 'undefined', frames: 0, disposed: true });
     await expect(page.locator('canvas')).toHaveCount(0);

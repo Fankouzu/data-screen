@@ -61,7 +61,7 @@ test('Decision Grid deep links refresh and all twelve cases can be selected', as
     await expect(page.locator('.dg-case-buttons button[aria-pressed="true"]')).toHaveCount(1);
   }
   await page.locator('a[href="#/"]').first().click();
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(7);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(8);
 });
 
 test('Decision Grid uses XYZ depth and paused dragging preserves the timeline', async ({ page }) => {

@@ -136,7 +136,7 @@ test('Market Neural deep links refresh and playback controls affect the real tim
   await page.getByRole('button', { name: '重播演示', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).time).toBeLessThan(.5);
   await page.locator('a[href="#/"]').first().click();
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(7);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(8);
 });
 
 test('Market Neural has a dense XYZ mesh and its modes change geometry through the full cycle', async ({ page }) => {
@@ -309,6 +309,6 @@ test('Market Neural reduced-motion mobile controls remain accessible without ove
   await page.getByRole('button', { name: '暂停动画', exact: true }).click();
   expect((await snapshot(page)).paused).toBe(true);
   await page.locator('a[href="#/"]').first().click();
-  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(7);
+  await expect(page.locator('#screen-grid .open-screen')).toHaveCount(8);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
