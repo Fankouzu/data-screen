@@ -6,13 +6,14 @@ const ease = (value: number) => { const t = clamp(value, 0, 1); return t * t * (
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 // Fixed frequency bins with fast attack and slower release, never a traveling wave.
 function audioLevel(band: number, time: number, channel: number) {
-  const clock = time * 9 + noise(band * 19 + channel * 113) * .8;
+  const audioTime = time * (2 / 3);
+  const clock = audioTime * 9 + noise(band * 19 + channel * 113) * .8;
   const step = Math.floor(clock), fraction = clock - step;
   const peak = (event: number) => .10 + Math.pow(noise(band * 29 + event * 17 + channel * 211), 1.5) * .55;
   const attack = ease(fraction / .16);
   const release = 1 - .68 * ease((fraction - .16) / .84);
   const pulse = mix(peak(step - 1) * .32, peak(step), attack) * release;
-  const beatAge = (time + channel * .06) % .42;
+  const beatAge = (audioTime + channel * .06) % .42;
   const beat = Math.min(beatAge / .012, 1) * Math.exp(-beatAge * 16);
   return clamp(.045 + pulse + beat * (.08 + .18 * noise(band * 7)), .06, .68);
 }
